@@ -1,25 +1,21 @@
 """
 main.py — CLI entry point.
 
-What this file does:
-  Defines the `cloudscan aws` command using Typer.
-  Orchestrates the scan: build client → run checks → render output.
+Sprint 1 additions:
+  --verbose    : sets logging to DEBUG, shows boto3 warnings and API call details.
+  --fail-on    : exits with code 1 if findings >= severity threshold exist.
+                 Designed for GitHub Actions / CI gates.
+  --min-severity: filters the DISPLAYED findings. --fail-on still checks all findings.
+  --quiet      : suppresses the findings table, shows only the summary panel.
 
-Why Typer:
-  Uses Python type hints for argument definitions. Adding a new option is
-  one line — no decorator soup like raw click.
-
-How the service filter works:
-  --services s3,iam passes a comma-separated string.
-  We split it and look up each service in REGISTRY.
-  Unknown service names print a warning but don't crash.
-
-How to run:
-  pip install -e .
-  cloudscan aws --profile default
-  cloudscan aws --services s3,iam --output json
+Exit codes:
+  0  — scan completed, no findings at or above --fail-on threshold.
+  1  — scan completed, findings found at or above --fail-on threshold.
+  2  — scan failed (credentials, config error).
 """
 
+import logging
+import time
 from typing import Optional
 
 import typer
@@ -27,6 +23,7 @@ from rich.console import Console
 
 from cloudscan.aws_client import AWSClient
 from cloudscan.checks import REGISTRY
+from cloudscan.models import Severity, severity_gte
 from cloudscan.report import terminal as terminal_report
 
 app = typer.Typer(
@@ -42,49 +39,89 @@ app.add_typer(aws_app, name="aws")
 @aws_app.callback(invoke_without_command=True)
 def scan_aws(
     ctx: typer.Context,
+
+    # AWS connection
     profile: Optional[str] = typer.Option(
-        None, "--profile", "-p", help="AWS CLI profile name (from ~/.aws/credentials)."
+        None, "--profile", "-p",
+        help="AWS CLI profile name (from ~/.aws/credentials).",
     ),
     region: str = typer.Option(
-        "us-east-1", "--region", "-r", help="AWS region to scan."
+        "us-east-1", "--region", "-r",
+        help="AWS region to scan.",
     ),
+
+    # Service selection
     services: Optional[str] = typer.Option(
-        None,
-        "--services",
-        "-s",
-        help="Comma-separated list of services to scan. Default: all. Example: s3,iam,ec2",
+        None, "--services", "-s",
+        help="Comma-separated services to scan. Default: all. Example: s3,iam,ec2",
     ),
+
+    # Output format
     output: str = typer.Option(
-        "terminal",
-        "--output",
-        "-o",
+        "terminal", "--output", "-o",
         help="Output format: terminal | json | html",
     ),
     output_file: Optional[str] = typer.Option(
-        None,
-        "--output-file",
-        "-f",
-        help="File path for json/html output. Defaults to cloudscan-report.{ext}",
+        None, "--output-file", "-f",
+        help="File path for json/html output.",
+    ),
+
+    # Filtering
+    min_severity: Optional[str] = typer.Option(
+        None, "--min-severity",
+        help="Only DISPLAY findings at this severity or above. Options: LOW, MEDIUM, HIGH, CRITICAL.",
+        show_default=False,
+    ),
+    quiet: bool = typer.Option(
+        False, "--quiet", "-q",
+        help="Show only the summary panel — suppress the findings table.",
+    ),
+
+    # CI/CD gate
+    fail_on: Optional[str] = typer.Option(
+        None, "--fail-on",
+        help=(
+            "Exit with code 1 if any findings are at this severity or above. "
+            "Options: LOW, MEDIUM, HIGH, CRITICAL. "
+            "Designed for CI pipelines."
+        ),
+        show_default=False,
+    ),
+
+    # Diagnostics
+    verbose: bool = typer.Option(
+        False, "--verbose", "-v",
+        help="Enable debug logging: show API warnings, access denied details, boto3 info.",
     ),
 ):
     """Scan an AWS account for security misconfigurations."""
     if ctx.invoked_subcommand is not None:
         return
 
+    _setup_logging(verbose)
+
+    # Validate enum-like options early — clear error before any AWS calls
+    min_sev_parsed = _parse_severity(min_severity, "--min-severity") if min_severity else None
+    fail_on_parsed = _parse_severity(fail_on, "--fail-on") if fail_on else None
+
     console.print("\n[bold cyan]cloudscan[/bold cyan] — AWS Security Scanner")
-    console.print(f"  Profile : {profile or 'default'}")
-    console.print(f"  Region  : {region}")
+    console.print(f"  Profile  : {profile or 'default'}")
+    console.print(f"  Region   : {region}")
+    if fail_on_parsed:
+        console.print(f"  Fail on  : [bold]{fail_on_parsed.value}[/bold] or above")
+    if min_sev_parsed:
+        console.print(f"  Showing  : {min_sev_parsed.value} and above")
 
-    # Build the AWS session
     aws_client = AWSClient(profile=profile, region=region)
-    console.print(f"  Account : {aws_client.account_id}\n")
+    console.print(f"  Account  : {aws_client.account_id}\n")
 
-    # Resolve which checks to run
     selected = _resolve_services(services)
     console.print(f"[dim]Running checks: {', '.join(selected)}[/dim]\n")
 
-    # Run all selected checks, aggregate findings
+    # ── Run checks ────────────────────────────────────────────────────────────
     all_findings = []
+    scan_start = time.monotonic()
+
     for service_name in selected:
         check_fn = REGISTRY[service_name]
         with console.status(f"[cyan]Scanning {service_name.upper()}...[/cyan]"):
@@ -92,22 +129,45 @@ def scan_aws(
                 findings = check_fn(aws_client)
                 all_findings.extend(findings)
                 console.print(
-                    f"  [green]✓[/green] {service_name.upper():10} "
+                    f"  [green]✓[/green] {service_name.upper():12} "
                     f"[dim]{len(findings)} finding(s)[/dim]"
                 )
             except Exception as e:
-                console.print(f"  [red]✗[/red] {service_name.upper():10} [red]Error: {e}[/red]")
+                # Unexpected error in the check runner itself (not an AWS API error)
+                console.print(f"  [red]✗[/red] {service_name.upper():12} [red]Error: {e}[/red]")
+                logging.getLogger(__name__).exception("Unexpected error in check '%s'", service_name)
+
+    scan_duration = time.monotonic() - scan_start
+
+    if aws_client.errors:
+        console.print(
+            f"\n[yellow]  ⚠ {len(aws_client.errors)} check(s) could not complete "
+            f"(see scan warnings below)[/yellow]"
+        )
 
     console.print()
 
-    # Render output
+    # ── Render output ─────────────────────────────────────────────────────────
     if output == "terminal":
-        terminal_report.render(all_findings, account_id=aws_client.account_id)
+        terminal_report.render(
+            all_findings,
+            account_id=aws_client.account_id,
+            quiet=quiet,
+            min_severity=min_sev_parsed,
+            scan_errors=aws_client.errors,
+            scan_duration=scan_duration,
+        )
 
     elif output == "json":
         from cloudscan.report import json_report
         path = output_file or "cloudscan-report.json"
-        json_report.render(all_findings, path=path, account_id=aws_client.account_id)
+        json_report.render(
+            all_findings,
+            path=path,
+            account_id=aws_client.account_id,
+            scan_errors=aws_client.errors,
+            scan_duration=scan_duration,
+        )
         console.print(f"[green]JSON report saved to: {path}[/green]")
 
     elif output == "html":
@@ -117,12 +177,45 @@ def scan_aws(
         console.print(f"[green]HTML report saved to: {path}[/green]")
 
     else:
-        console.print(f"[red]Unknown output format: {output}. Use: terminal, json, html[/red]")
-        raise typer.Exit(1)
+        console.print(f"[red]Unknown output format: '{output}'. Use: terminal, json, html[/red]")
+        raise typer.Exit(2)
+
+    # ── CI/CD gate ────────────────────────────────────────────────────────────
+    if fail_on_parsed:
+        breaching = [f for f in all_findings if severity_gte(f.severity, fail_on_parsed)]
+        if breaching:
+            console.print(
+                f"[bold red]FAILED:[/bold red] {len(breaching)} finding(s) at "
+                f"{fail_on_parsed.value} or above. Exiting with code 1.\n"
+            )
+            raise typer.Exit(1)
+        else:
+            console.print(
+                f"[bold green]PASSED:[/bold green] No findings at "
+                f"{fail_on_parsed.value} or above.\n"
+            )
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _setup_logging(verbose: bool) -> None:
+    level = logging.DEBUG if verbose else logging.WARNING
+    logging.basicConfig(
+        level=level,
+        format="[%(levelname)s] %(name)s: %(message)s",
+    )
+
+
+def _parse_severity(value: str, flag_name: str) -> Severity:
+    try:
+        return Severity(value.upper())
+    except ValueError:
+        valid = ", ".join(s.value for s in Severity)
+        console.print(f"[red]Invalid value for {flag_name}: '{value}'. Valid: {valid}[/red]")
+        raise typer.Exit(2)
 
 
 def _resolve_services(services_arg: Optional[str]) -> list[str]:
-    """Parse the --services flag and return a list of valid service names."""
     if not services_arg:
         return list(REGISTRY.keys())
 
@@ -136,7 +229,7 @@ def _resolve_services(services_arg: Optional[str]) -> list[str]:
 
     if not valid:
         console.print("[red]No valid services selected. Aborting.[/red]")
-        raise typer.Exit(1)
+        raise typer.Exit(2)
 
     return valid
 

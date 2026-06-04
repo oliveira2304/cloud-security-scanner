@@ -19,49 +19,6 @@ Built from scratch, **inspired by [Prowler](https://github.com/prowler-cloud/pro
 
 ---
 
-## Demo
-
-```
-$ cloudscan aws --profile sandbox
-
- cloudscan - AWS Security Scanner
-  Profile : sandbox
-  Region  : us-east-1
-  Account : 123456789012
-
-Running checks: s3, iam, ec2, logging
-
-  + S3          4 finding(s)
-  + IAM         4 finding(s)
-  + EC2         1 finding(s)
-  + LOGGING     2 finding(s)
-
-+----------+------------+------------------------------+-------------------------------------+---------+
-| Severity | Service    | Resource                     | Title                               |Evidence |
-+----------+------------+------------------------------+-------------------------------------+---------+
-| CRITICAL | S3         | acme-app-assets-prod         | S3 Block Public Access config...    | Public..|
-| CRITICAL | IAM        | DevOpsFullAccess             | IAM policy grants full admin...     | Action..|
-| CRITICAL | EC2        | sg-0a1b2c3d (web-tier-sg)   | Security Group exposes SSH port 22  | 0.0.0.. |
-| CRITICAL | CloudTrail | account/123456789012         | CloudTrail is not enabled           | descri..|
-|   HIGH   | S3         | acme-app-assets-prod         | S3 bucket encryption not enabled    | GetBuc..|
-|   HIGH   | IAM        | deploy-user                  | IAM user has no MFA device          | ListMF..|
-|   HIGH   | IAM        | deploy-user                  | IAM access key not rotated 143 days | AKIA0.. |
-|   HIGH   | GuardDuty  | account/123456789012         | GuardDuty is not enabled            | list_d..|
-|  MEDIUM  | S3         | acme-backups-2024            | S3 bucket versioning not enabled    | Versio..|
-+----------+------------+------------------------------+-------------------------------------+---------+
-
- Scan Summary
-  Account: 123456789012
-  Total findings: 11
-
-  CRITICAL  4
-      HIGH  5
-    MEDIUM  2
-       LOW  0
-```
-
----
-
 ## Checks
 
 | Service | Check | Severity |
@@ -69,6 +26,9 @@ Running checks: s3, iam, ec2, logging
 | **S3** | Block Public Access disabled or missing | `CRITICAL` |
 | **S3** | Server-side encryption not configured | `HIGH` |
 | **S3** | Versioning disabled | `MEDIUM` |
+| **IAM** | Root account has active access keys | `CRITICAL` |
+| **IAM** | Root account has no MFA enabled | `CRITICAL` |
+| **IAM** | Root account used in last 30 days | `HIGH` |
 | **IAM** | User without MFA device | `HIGH` |
 | **IAM** | Access key not rotated in 90+ days | `HIGH` |
 | **IAM** | Customer-managed policy with `Action: "*"` + `Resource: "*"` | `CRITICAL` |
@@ -91,7 +51,6 @@ Running checks: s3, iam, ec2, logging
 git clone https://github.com/oliveira2304/cloud-security-scanner.git
 cd cloud-security-scanner
 
-# Create a virtual environment (recommended)
 python -m venv .venv
 source .venv/bin/activate        # Linux/macOS
 .venv\Scripts\activate           # Windows
@@ -103,36 +62,143 @@ pip install -e .
 
 ## Usage
 
+### Basic scan
+
 ```bash
 # Scan using the default AWS profile
 cloudscan aws
 
-# Scan with a named profile
-cloudscan aws --profile sandbox
-
-# Scan a specific region
-cloudscan aws --region eu-west-1
+# Scan with a named profile and specific region
+cloudscan aws --profile sandbox --region eu-west-1
 
 # Scan specific services only
 cloudscan aws --services s3,iam
-
-# Export findings as JSON
-cloudscan aws --output json --output-file results.json
-
-# Generate an HTML report
-cloudscan aws --output html --output-file report.html
-
-# Combine options
-cloudscan aws --profile sandbox --region eu-west-1 --services s3,iam,ec2 --output html
 ```
 
 ### Output formats
 
-| Format | Command | Use case |
-|--------|---------|----------|
-| Terminal | `--output terminal` (default) | Interactive use, quick checks |
-| JSON | `--output json` | Automation, diffing, SIEM ingestion |
-| HTML | `--output html` | Reports to share with teams |
+```bash
+# Terminal output (default)
+cloudscan aws
+
+# Export as JSON
+cloudscan aws --output json --output-file results.json
+
+# Generate an HTML report
+cloudscan aws --output html --output-file report.html
+```
+
+### Filtering output
+
+```bash
+# Show only HIGH and CRITICAL findings
+cloudscan aws --min-severity HIGH
+
+# Show only the summary panel (no findings table)
+cloudscan aws --quiet
+
+# Combine: quiet summary of critical findings only
+cloudscan aws --min-severity CRITICAL --quiet
+```
+
+### CI/CD pipeline integration
+
+`--fail-on` exits with **code 1** if any findings are at or above the threshold.
+This makes `cloudscan` a security gate in GitHub Actions, GitLab CI, or Jenkins.
+
+```bash
+# Fail the pipeline if any CRITICAL findings are found
+cloudscan aws --fail-on CRITICAL
+
+# Fail on HIGH or above
+cloudscan aws --fail-on HIGH
+
+# Full CI usage: specific services, exit code, JSON artifact
+cloudscan aws --services s3,iam,ec2 --fail-on CRITICAL --output json --output-file scan.json
+```
+
+**GitHub Actions example:**
+
+```yaml
+- name: Run cloudscan security check
+  run: cloudscan aws --fail-on CRITICAL --output json --output-file scan.json
+
+- name: Upload scan results
+  uses: actions/upload-artifact@v4
+  with:
+    name: cloudscan-results
+    path: scan.json
+  if: always()
+```
+
+### Debugging and permissions
+
+```bash
+# Show API warnings, AccessDenied details, and boto3 debug info
+cloudscan aws --verbose
+
+# Example output with --verbose when a permission is missing:
+# [WARNING] cloudscan.aws_client: ACCESS DENIED — S3/_check_public_access on resource 'my-bucket'.
+# Add the required IAM permission to the scanning role.
+```
+
+When a check fails due to missing permissions, `cloudscan` **never silently returns "no findings"**.
+It shows a dedicated "Scan Warnings" section so you always know when results may be incomplete.
+
+### Exit codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | Scan completed, no findings at or above `--fail-on` threshold |
+| `1` | Scan completed, findings found at or above `--fail-on` threshold |
+| `2` | Scan failed (bad credentials, invalid arguments) |
+
+---
+
+## Demo output
+
+```
+cloudscan - AWS Security Scanner
+  Profile  : sandbox
+  Region   : us-east-1
+  Fail on  : CRITICAL or above
+  Account  : 123456789012
+
+Running checks: s3, iam, ec2, logging
+
+  + S3           4 finding(s)
+  + IAM          5 finding(s)
+  + EC2          1 finding(s)
+  + LOGGING      2 finding(s)
+
++----------+------------+------------------------------+-------------------------------------+
+| Severity | Service    | Resource                     | Title                               |
++----------+------------+------------------------------+-------------------------------------+
+| CRITICAL | IAM        | root                         | Root account has no MFA enabled     |
+| CRITICAL | IAM        | root                         | Root account has active access keys |
+| CRITICAL | S3         | acme-app-assets-prod         | S3 Block Public Access config...    |
+| CRITICAL | EC2        | sg-0a1b2c3d (web-tier-sg)   | Security Group exposes SSH port 22  |
+| CRITICAL | CloudTrail | account/123456789012         | CloudTrail is not enabled           |
+|   HIGH   | IAM        | root                         | Root account was used 3 day(s) ago  |
+|   HIGH   | IAM        | deploy-user                  | IAM user has no MFA device          |
+|   HIGH   | S3         | acme-app-assets-prod         | S3 bucket encryption not enabled    |
+|   HIGH   | GuardDuty  | account/123456789012         | GuardDuty is not enabled            |
+|  MEDIUM  | S3         | acme-backups-2024            | S3 bucket versioning not enabled    |
++----------+------------+------------------------------+-------------------------------------+
+
+ Scan Summary
+  Account:        123456789012
+  Total findings: 12
+
+  CRITICAL  5
+      HIGH  4
+    MEDIUM  1
+       LOW  0
+
+  Scan completed in 3.2s
+
+FAILED: 5 finding(s) at CRITICAL or above. Exiting with code 1.
+```
 
 ---
 
@@ -140,27 +206,27 @@ cloudscan aws --profile sandbox --region eu-west-1 --services s3,iam,ec2 --outpu
 
 ```
 cloudscan/
-├── main.py               CLI entry point (Typer)
-├── models.py             Finding dataclass + Severity enum
-├── aws_client.py         boto3 session wrapper
+├── main.py               CLI entry point (Typer) — orchestration, flags, exit codes
+├── models.py             Finding + ScanError dataclasses, Severity enum, severity_gte()
+├── aws_client.py         boto3 session wrapper + error collector (record_error)
 ├── checks/
 │   ├── __init__.py       REGISTRY: maps service name to run()
 │   ├── s3.py             S3 checks
-│   ├── iam.py            IAM checks
+│   ├── iam.py            IAM checks (incl. root account)
 │   ├── ec2.py            EC2 / Security Group checks
 │   └── logging_checks.py CloudTrail + GuardDuty
 └── report/
-    ├── terminal.py        Rich table + summary panel
+    ├── terminal.py        Rich table + summary + scan warnings panel
     ├── json_report.py     Structured JSON with metadata envelope
     └── html_report.py     Jinja2 self-contained HTML report
 ```
 
 **Key design decisions:**
 
-- **Every check has signature `run(client) -> List[Finding]`** — reporters are completely decoupled from AWS logic. Adding a new service means one new file and one line in `REGISTRY`.
-- **`Finding` is a dataclass, not a dict** — type-safe throughout, serialises cleanly to JSON via `.to_dict()`.
-- **`AWSClient` wraps boto3** — credentials and region configured in one place; tests swap in mocked sessions without touching check code.
-- **Fail fast on credentials** — `AWSClient.__init__` calls `sts:GetCallerIdentity` immediately, not mid-scan.
+- **`Finding` vs `ScanError`** — Security issues and scanner failures are separate types. `0 findings` never means "scan failed silently". Incomplete scans surface a distinct "Scan Warnings" section.
+- **`record_error()` on AWSClient** — All checks delegate error handling to the client. Each check function raises `ClientError` freely; `run()` catches it and calls `client.record_error()`. This is testable and centralized.
+- **`--fail-on` evaluates all findings** — `--min-severity` only affects display. The CI gate always runs against the full finding list, so hidden lower-severity findings don't mask failures.
+- **Cached `account_id`** — The original implementation called `sts:GetCallerIdentity` on every property access. Now it's cached at session init.
 
 ---
 
@@ -176,40 +242,41 @@ pytest
 
 # With coverage report
 pytest --cov=cloudscan --cov-report=term-missing
+
+# Run a specific test file
+pytest tests/test_iam.py -v
 ```
 
-The test suite covers each check function in isolation: creating the specific misconfiguration with moto, calling the check, and asserting on finding ID and severity.
+**Test coverage includes:**
+- S3: public access (missing config, partial, fully enabled), encryption, versioning
+- IAM: root MFA, root access keys, user MFA, key rotation, wildcard policies
+- EC2: SSH/RDP/DB ports open, all-traffic rule, restricted access (no finding)
+- Models: severity comparison logic for `--fail-on` and `--min-severity`
+- Error handling: AccessDenied is recorded, never swallowed
 
 ---
 
 ## Terraform vulnerable lab
 
-`terraform-lab/insecure-aws-lab/` provisions intentionally misconfigured AWS resources for end-to-end testing.
-
-**Resources created (all deliberately insecure):**
-- S3 bucket: Block Public Access disabled, no encryption, no versioning
-- IAM user: no MFA + active access key + wildcard `Action: *` policy
-- Security Group: SSH (22) and MySQL (3306) open to `0.0.0.0/0`
+`terraform-lab/insecure-aws-lab/` provisions intentionally misconfigured resources for end-to-end testing.
 
 ```bash
 cd terraform-lab/insecure-aws-lab
 terraform init
-terraform apply     # use a sandbox account only
+terraform apply     # sandbox account only
 
-# Scan — should surface 8+ findings
-cloudscan aws --profile sandbox
+cloudscan aws --profile sandbox --fail-on CRITICAL
 
-# Clean up all resources
 terraform destroy
 ```
 
-> **Warning:** Only run this in a dedicated AWS sandbox account. It intentionally creates public-facing resources.
+> **Warning:** Only run this in a dedicated AWS sandbox account.
 
 ---
 
 ## Required AWS permissions
 
-`cloudscan` only needs **read-only** access. Example least-privilege policy:
+`cloudscan` only needs read-only access:
 
 ```json
 {
@@ -221,6 +288,9 @@ terraform destroy
       "s3:GetBucketPublicAccessBlock",
       "s3:GetBucketEncryption",
       "s3:GetBucketVersioning",
+      "iam:GetAccountSummary",
+      "iam:GenerateCredentialReport",
+      "iam:GetCredentialReport",
       "iam:ListUsers",
       "iam:ListMFADevices",
       "iam:ListAccessKeys",
@@ -258,14 +328,14 @@ terraform destroy
 
 ## Roadmap
 
+- [ ] Compliance framework mapping (CIS AWS Benchmark, NIST 800-53)
+- [ ] SARIF output (GitHub Security tab integration)
 - [ ] Multi-region scanning (`--all-regions`)
 - [ ] Assume-role support for cross-account scanning
-- [ ] RDS: public access, encryption at rest, deletion protection
-- [ ] Lambda: function URLs with public auth, environment variable secrets
-- [ ] AWS Config rules status check
-- [ ] SARIF output format (integrates with GitHub Security tab)
-- [ ] Severity filtering (`--min-severity HIGH`)
-- [ ] JSON diff between two scan results
+- [ ] RDS: public access, encryption, deletion protection
+- [ ] Lambda: public function URLs, environment variable secrets
+- [ ] Severity filtering (`--min-severity`) — done in v0.2
+- [ ] CI exit codes (`--fail-on`) — done in v0.2
 
 ---
 
