@@ -157,6 +157,24 @@ def test_secret_pattern_detected(var_name):
     assert findings, f"Pattern not detected for variable name: {var_name}"
 
 
+# ── False positive pattern guard ─────────────────────────────────────────────
+
+@pytest.mark.parametrize("var_name", [
+    "OAUTH_REDIRECT_URL",   # auth embedded in oauth — must NOT match
+    "AUTHOR_NAME",          # auth embedded in author — must NOT match
+    "TOKENIZER_VERSION",    # token embedded — must NOT match
+    "AUTHENTICATE_MODE",    # authenticate — must NOT match
+    "APP_ENVIRONMENT",      # safe
+    "LOG_LEVEL",            # safe
+])
+def test_false_positive_not_triggered(var_name):
+    fn = _make_function(Environment={"Variables": {var_name: "some_value"}})
+    findings = _check_env_secrets(fn, "my-function")
+    assert findings == [], (
+        f"False positive: '{var_name}' should NOT trigger LAMBDA_ENV_SECRET_EXPOSURE"
+    )
+
+
 # ── Compliance ────────────────────────────────────────────────────────────────
 
 def test_lambda_findings_have_compliance():

@@ -37,9 +37,16 @@ logger = logging.getLogger(__name__)
 
 # Patterns that suggest a variable name holds a secret.
 # We match names only — never read or log values.
+#
+# Design notes:
+#   - `token` and `auth` use a negative-lookbehind/ahead to avoid false
+#     positives like TOKENIZER_VERSION, OAUTH_REDIRECT_URL, AUTHOR_NAME.
+#     They only match when not immediately surrounded by other letters.
+#   - All other terms are specific enough that word-boundary issues don't apply.
 _SECRET_NAME_PATTERNS = re.compile(
     r"(password|passwd|secret|api[_-]?key|access[_-]?key|private[_-]?key"
-    r"|token|auth|credential|db[_-]?pass|database[_-]?url|connection[_-]?string"
+    r"|(?<![a-zA-Z])(token|auth)(?![a-zA-Z])"
+    r"|credential|db[_-]?pass|database[_-]?url|connection[_-]?string"
     r"|stripe|twilio|sendgrid|github[_-]?token|aws[_-]?secret)",
     re.IGNORECASE,
 )

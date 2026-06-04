@@ -74,9 +74,13 @@ def run_all_regions(
         for service_name in regional_svcs
     ]
 
+    # Create one regional client per region (not one per region×service).
+    # All regional clients share the same boto3 session and errors list.
+    regional_clients = {region: client.for_region(region) for region in regions}
+
     with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as pool:
         futures = {
-            pool.submit(_run_service, client.for_region(region), service_name, region): (region, service_name)
+            pool.submit(_run_service, regional_clients[region], service_name, region): (region, service_name)
             for region, service_name in tasks
         }
 
