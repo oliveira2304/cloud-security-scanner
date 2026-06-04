@@ -8,10 +8,14 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
            background: #0f1117; color: #e2e8f0; min-height: 100vh; }
-    header { background: #1a1d2e; border-bottom: 2px solid #2d3748; padding: 24px 40px; }
-    header h1 { font-size: 1.6rem; color: #63b3ed; letter-spacing: 0.05em; }
-    header .meta { font-size: 0.85rem; color: #718096; margin-top: 6px; }
-    .container { max-width: 1200px; margin: 0 auto; padding: 32px 40px; }
+
+    header { background: #1a1d2e; border-bottom: 2px solid #2d3748; padding: 24px 40px;
+             display: flex; justify-content: space-between; align-items: center; }
+    header h1 { font-size: 1.5rem; color: #63b3ed; letter-spacing: 0.05em; }
+    header .meta { font-size: 0.82rem; color: #718096; margin-top: 6px; }
+    .logo { font-size: 1.8rem; }
+
+    .container { max-width: 1300px; margin: 0 auto; padding: 32px 40px; }
 
     /* Summary cards */
     .summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 32px; }
@@ -29,43 +33,73 @@
     .medium .count   { color: #faf089; }
     .low .count      { color: #68d391; }
 
-    /* Findings table */
+    /* Filters */
+    .filters { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+    .filter-btn { padding: 6px 14px; border-radius: 99px; border: 1px solid #4a5568;
+                  background: transparent; color: #a0aec0; font-size: 0.8rem; cursor: pointer;
+                  transition: all 0.15s; }
+    .filter-btn:hover, .filter-btn.active { background: #2d3748; color: #e2e8f0; border-color: #718096; }
+    .filter-btn.f-critical.active { border-color: #fc8181; color: #fc8181; }
+    .filter-btn.f-high.active     { border-color: #f6ad55; color: #f6ad55; }
+    .filter-btn.f-medium.active   { border-color: #faf089; color: #faf089; }
+    .filter-btn.f-low.active      { border-color: #68d391; color: #68d391; }
+
+    /* Table */
     .table-wrap { overflow-x: auto; border-radius: 8px; }
     table { width: 100%; border-collapse: collapse; background: #1a1d2e; }
     thead th { background: #2d3748; padding: 12px 16px; text-align: left;
                font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em;
-               color: #a0aec0; font-weight: 600; }
+               color: #a0aec0; font-weight: 600; white-space: nowrap; }
     tbody tr { border-bottom: 1px solid #2d3748; transition: background 0.15s; }
     tbody tr:hover { background: #232637; }
-    tbody td { padding: 14px 16px; font-size: 0.88rem; vertical-align: top; }
+    tbody tr[data-severity="CRITICAL"] { border-left: 3px solid #fc8181; }
+    tbody tr[data-severity="HIGH"]     { border-left: 3px solid #f6ad55; }
+    tbody tr[data-severity="MEDIUM"]   { border-left: 3px solid #faf089; }
+    tbody tr[data-severity="LOW"]      { border-left: 3px solid #68d391; }
+    tbody td { padding: 12px 16px; font-size: 0.86rem; vertical-align: top; }
 
     /* Severity badges */
     .badge { display: inline-block; padding: 3px 10px; border-radius: 99px;
-             font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
-    .badge-CRITICAL { background: rgba(252,129,129,0.15); color: #fc8181; border: 1px solid #fc8181; }
-    .badge-HIGH     { background: rgba(246,173,85,0.15);  color: #f6ad55; border: 1px solid #f6ad55; }
-    .badge-MEDIUM   { background: rgba(250,240,137,0.15); color: #ecc94b; border: 1px solid #ecc94b; }
-    .badge-LOW      { background: rgba(104,211,145,0.15); color: #68d391; border: 1px solid #68d391; }
+             font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+             letter-spacing: 0.06em; white-space: nowrap; }
+    .badge-CRITICAL { background: rgba(252,129,129,.15); color: #fc8181; border: 1px solid #fc8181; }
+    .badge-HIGH     { background: rgba(246,173,85,.15);  color: #f6ad55; border: 1px solid #f6ad55; }
+    .badge-MEDIUM   { background: rgba(250,240,137,.15); color: #ecc94b; border: 1px solid #ecc94b; }
+    .badge-LOW      { background: rgba(104,211,145,.15); color: #68d391; border: 1px solid #68d391; }
+
+    /* CIS tags */
+    .cis-tag { display: inline-block; padding: 2px 7px; border-radius: 4px;
+               background: rgba(99,179,237,.12); color: #63b3ed;
+               border: 1px solid rgba(99,179,237,.3);
+               font-size: 0.7rem; font-family: monospace; margin: 2px 2px 2px 0; }
 
     .resource { font-family: monospace; font-size: 0.82rem; color: #90cdf4; }
-    .evidence { font-family: monospace; font-size: 0.78rem; color: #718096; }
-    .rec { font-size: 0.82rem; color: #a0aec0; }
+    .evidence { font-family: monospace; font-size: 0.76rem; color: #718096; }
+    .rec { font-size: 0.8rem; color: #a0aec0; margin-top: 5px; line-height: 1.4; }
 
-    /* Collapsible detail rows */
-    details summary { cursor: pointer; font-weight: 600; color: #e2e8f0; }
-    details summary::marker { color: #63b3ed; }
-    details p { margin-top: 6px; color: #a0aec0; font-size: 0.85rem; line-height: 1.5; }
+    details summary { cursor: pointer; font-weight: 600; color: #e2e8f0; user-select: none; }
+    details[open] summary { color: #90cdf4; }
+    details p { margin-top: 6px; color: #a0aec0; font-size: 0.84rem; line-height: 1.5; }
 
+    .hidden { display: none !important; }
     footer { text-align: center; padding: 24px; font-size: 0.78rem; color: #4a5568; }
   </style>
 </head>
 <body>
   <header>
-    <h1>☁ CloudScan Security Report</h1>
-    <div class="meta">Account: {{ account_id }} &nbsp;|&nbsp; Scanned: {{ scanned_at }} &nbsp;|&nbsp; cloudscan v{{ version }}</div>
+    <div>
+      <h1>CloudScan Security Report</h1>
+      <div class="meta">
+        Account: <strong>{{ account_id }}</strong> &nbsp;|&nbsp;
+        Scanned: {{ scanned_at }} &nbsp;|&nbsp;
+        cloudscan v{{ version }}
+      </div>
+    </div>
   </header>
 
   <div class="container">
+
+    <!-- Summary cards -->
     <div class="summary">
       <div class="card critical">
         <div class="count">{{ severity_counts.CRITICAL }}</div>
@@ -86,20 +120,50 @@
     </div>
 
     {% if findings %}
+
+    <!-- Severity filter buttons -->
+    <div class="filters">
+      <button class="filter-btn active" onclick="filterAll(this)">All ({{ findings|length }})</button>
+      {% if severity_counts.CRITICAL > 0 %}
+      <button class="filter-btn f-critical" onclick="filterSeverity('CRITICAL', this)">
+        Critical ({{ severity_counts.CRITICAL }})
+      </button>
+      {% endif %}
+      {% if severity_counts.HIGH > 0 %}
+      <button class="filter-btn f-high" onclick="filterSeverity('HIGH', this)">
+        High ({{ severity_counts.HIGH }})
+      </button>
+      {% endif %}
+      {% if severity_counts.MEDIUM > 0 %}
+      <button class="filter-btn f-medium" onclick="filterSeverity('MEDIUM', this)">
+        Medium ({{ severity_counts.MEDIUM }})
+      </button>
+      {% endif %}
+      {% if severity_counts.LOW > 0 %}
+      <button class="filter-btn f-low" onclick="filterSeverity('LOW', this)">
+        Low ({{ severity_counts.LOW }})
+      </button>
+      {% endif %}
+    </div>
+
+    <!-- Findings table -->
     <div class="table-wrap">
-      <table>
+      <table id="findings-table">
         <thead>
           <tr>
             <th>Severity</th>
             <th>Service</th>
             <th>Resource</th>
             <th>Finding</th>
+            <th>CIS AWS 1.4</th>
             <th>Evidence / Recommendation</th>
           </tr>
         </thead>
         <tbody>
           {% for f in findings | sort(attribute='severity.value') %}
-          <tr>
+          {% set cis = f.compliance.get('CIS_AWS_1.4', {}) %}
+          {% set cis_controls = cis.get('controls', []) %}
+          <tr data-severity="{{ f.severity.value }}">
             <td><span class="badge badge-{{ f.severity.value }}">{{ f.severity.value }}</span></td>
             <td>{{ f.service }}</td>
             <td class="resource">{{ f.resource }}</td>
@@ -110,19 +174,48 @@
               </details>
             </td>
             <td>
+              {% if cis_controls %}
+                {% for ctrl in cis_controls %}
+                  <span class="cis-tag" title="{{ cis.get('title', '') }}">{{ ctrl }}</span>
+                {% endfor %}
+              {% else %}
+                <span style="color:#4a5568; font-size:0.75rem;">—</span>
+              {% endif %}
+            </td>
+            <td>
               <div class="evidence">{{ f.evidence }}</div>
-              <div class="rec" style="margin-top:6px;">{{ f.recommendation }}</div>
+              <div class="rec">{{ f.recommendation }}</div>
             </td>
           </tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
+
     {% else %}
-    <p style="color: #68d391; text-align: center; padding: 40px;">No findings detected.</p>
+    <p style="color:#68d391; text-align:center; padding:40px; font-size:1.1rem;">
+      No findings detected.
+    </p>
     {% endif %}
   </div>
 
   <footer>Generated by <strong>cloudscan</strong> v{{ version }}</footer>
+
+  <script>
+    function filterSeverity(severity, btn) {
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      document.querySelectorAll('#findings-table tbody tr').forEach(row => {
+        row.classList.toggle('hidden', row.dataset.severity !== severity);
+      });
+    }
+    function filterAll(btn) {
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      document.querySelectorAll('#findings-table tbody tr').forEach(row => {
+        row.classList.remove('hidden');
+      });
+    }
+  </script>
 </body>
 </html>

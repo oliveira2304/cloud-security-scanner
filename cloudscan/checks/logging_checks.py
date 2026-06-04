@@ -8,6 +8,7 @@ from typing import List
 from botocore.exceptions import ClientError
 
 from cloudscan.aws_client import AWSClient
+from cloudscan.compliance import get_compliance
 from cloudscan.models import Finding, Severity
 
 logger = logging.getLogger(__name__)
@@ -51,6 +52,7 @@ def _check_cloudtrail(client: AWSClient) -> List[Finding]:
                 "Enable log file validation."
             ),
             evidence="describe_trails: empty trailList",
+            compliance=get_compliance("LOGGING_CLOUDTRAIL_NOT_ENABLED"),
         )]
 
     active = False
@@ -72,10 +74,9 @@ def _check_cloudtrail(client: AWSClient) -> List[Finding]:
             severity=Severity.CRITICAL,
             title="CloudTrail trail exists but is not logging",
             description="A CloudTrail trail is configured but logging is currently disabled.",
-            recommendation=(
-                "Enable logging: aws cloudtrail start-logging --name <trail-arn>"
-            ),
+            recommendation="Enable logging: aws cloudtrail start-logging --name <trail-arn>",
             evidence=f"Trails found: {len(trails)}, IsLogging: False for all",
+            compliance=get_compliance("LOGGING_CLOUDTRAIL_NOT_LOGGING"),
         )]
 
     return []
@@ -102,6 +103,7 @@ def _check_guardduty(client: AWSClient) -> List[Finding]:
                 "Use AWS Organizations to centrally enable it across all accounts."
             ),
             evidence="list_detectors: empty DetectorIds",
+            compliance=get_compliance("LOGGING_GUARDDUTY_NOT_ENABLED"),
         )]
 
     for detector_id in detectors:
@@ -116,6 +118,7 @@ def _check_guardduty(client: AWSClient) -> List[Finding]:
                 description="A GuardDuty detector exists but is not in ENABLED state.",
                 recommendation="Re-enable GuardDuty. Investigate why it was suspended.",
                 evidence=f"DetectorId: {detector_id}, Status: {detail.get('Status')}",
+                compliance=get_compliance("LOGGING_GUARDDUTY_SUSPENDED"),
             )]
 
     return []

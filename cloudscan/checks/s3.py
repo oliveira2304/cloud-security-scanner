@@ -1,15 +1,10 @@
 """
 checks/s3.py — S3 security checks.
 
-Error handling strategy:
-  _check_* functions catch only EXPECTED exceptions (e.g. NoSuchPublicAccessBlockConfiguration,
-  which is a normal API response meaning "config doesn't exist").
-
-  They do NOT catch ClientError — if AWS returns AccessDenied or any other unexpected
-  error, it bubbles up to run(), which records it via client.record_error().
-
-  This means: if a check fails due to missing permissions, it appears in the
-  scan summary as a ScanError, not as a silent "no findings".
+Error handling: _check_* functions raise ClientError freely.
+run() catches ClientError at each step and records via client.record_error().
+Expected "not found" errors (NoSuchPublicAccessBlockConfiguration, etc.) are
+caught by error code and converted to findings.
 """
 
 import logging
@@ -18,6 +13,7 @@ from typing import List
 from botocore.exceptions import ClientError
 
 from cloudscan.aws_client import AWSClient
+from cloudscan.compliance import get_compliance
 from cloudscan.models import Finding, Severity
 
 logger = logging.getLogger(__name__)
@@ -76,6 +72,7 @@ def _check_public_access(s3_client, bucket_name: str) -> List[Finding]:
                     "BlockPublicAcls, IgnorePublicAcls, BlockPublicPolicy, RestrictPublicBuckets."
                 ),
                 evidence=f"Disabled settings: {', '.join(disabled)}",
+                compliance=get_compliance("S3_PUBLIC_ACCESS_BLOCK_DISABLED"),
             )]
 
     except ClientError as e:
@@ -89,8 +86,9 @@ def _check_public_access(s3_client, bucket_name: str) -> List[Finding]:
                 description="No Block Public Access configuration exists — the bucket defaults to public.",
                 recommendation="Enable S3 Block Public Access at both bucket and account level.",
                 evidence="PublicAccessBlockConfiguration: not found",
+                compliance=get_compliance("S3_PUBLIC_ACCESS_BLOCK_MISSING"),
             )]
-        raise  # unexpected error — let run() catch and record it
+        raise
 
     return []
 
@@ -113,8 +111,9 @@ def _check_encryption(s3_client, bucket_name: str) -> List[Finding]:
                     "Prefer SSE-KMS for audit trail and key rotation."
                 ),
                 evidence="GetBucketEncryption: ServerSideEncryptionConfigurationNotFoundError",
+                compliance=get_compliance("S3_ENCRYPTION_DISABLED"),
             )]
-        raise  # unexpected error — let run() catch and record it
+        raise
 
     return []
 
@@ -137,6 +136,7 @@ def _check_versioning(s3_client, bucket_name: str) -> List[Finding]:
             ),
             recommendation="Enable versioning. Consider MFA Delete for critical buckets.",
             evidence=f"VersioningConfiguration.Status: '{status or 'not set'}'",
+            compliance=get_compliance("S3_VERSIONING_DISABLED"),
         )]
 
     return []

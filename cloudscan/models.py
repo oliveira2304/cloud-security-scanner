@@ -1,13 +1,12 @@
 """
 models.py — Core data structures for the scanner.
 
-Every check in checks/ returns List[Finding]. Nothing else.
-Reporters in report/ only know about Finding and ScanError — both are decoupled from AWS logic.
+Sprint 2: Added `compliance` field to Finding.
 
-ScanError vs Finding:
-  Finding  = a security misconfiguration in the AWS account.
+Finding vs ScanError:
+  Finding   = a security misconfiguration in the AWS account.
   ScanError = a problem with the scanner itself (AccessDenied, API error).
-  They are intentionally separate so that "0 findings" cannot be confused with
+  Keeping them separate ensures "0 findings" is never confused with
   "the scan failed silently due to missing permissions".
 """
 
@@ -32,7 +31,7 @@ class Severity(str, Enum):
         }[self]
 
 
-# Ordered from most to least severe — used for --min-severity and --fail-on comparisons.
+# Ordered most → least severe. Used by --min-severity and --fail-on.
 SEVERITY_ORDER = [Severity.CRITICAL, Severity.HIGH, Severity.MEDIUM, Severity.LOW]
 
 
@@ -52,6 +51,16 @@ class Finding:
     recommendation: str
     evidence: str
     region: Optional[str] = None
+
+    # compliance maps framework name → {controls: [...], title: "..."}
+    # Populated from cloudscan/compliance.py via get_compliance(finding_id).
+    # Example:
+    #   {
+    #     "CIS_AWS_1.4": {"controls": ["1.4"], "title": "Ensure no root access key"},
+    #     "NIST_800_53":  {"controls": ["AC-6"], "title": "Least Privilege"}
+    #   }
+    compliance: dict = field(default_factory=dict)
+
     metadata: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict:
@@ -65,8 +74,19 @@ class Finding:
             "recommendation": self.recommendation,
             "evidence": self.evidence,
             "region": self.region,
+            "compliance": self.compliance,
             "metadata": self.metadata,
         }
+
+    def cis_controls(self) -> list[str]:
+        """Return the CIS AWS 1.4 control IDs for this finding, or []."""
+        cis = self.compliance.get("CIS_AWS_1.4", {})
+        return cis.get("controls", [])
+
+    def nist_controls(self) -> list[str]:
+        """Return the NIST 800-53 control IDs for this finding, or []."""
+        nist = self.compliance.get("NIST_800_53", {})
+        return nist.get("controls", [])
 
 
 @dataclass
@@ -74,18 +94,13 @@ class ScanError:
     """
     Represents a failure during a check — NOT a security finding.
 
-    Created when:
-      - AWS returns AccessDenied (missing IAM permissions)
-      - An unexpected API error occurs
-      - The check cannot determine the security state of a resource
-
-    Displayed separately from findings so that "0 findings" is never
-    confused with "scan failed silently".
+    Created when AWS returns AccessDenied or an unexpected API error occurs.
+    Displayed separately so "0 findings" cannot be confused with "scan incomplete".
     """
     service: str
     check: str
     resource: str
-    error_type: str  # "ACCESS_DENIED" | "API_ERROR" | "UNKNOWN"
+    error_type: str  # "ACCESS_DENIED" | "API_ERROR"
     message: str
 
     def to_dict(self) -> dict:

@@ -1,17 +1,12 @@
 """
 main.py — CLI entry point.
 
-Sprint 1 additions:
-  --verbose    : sets logging to DEBUG, shows boto3 warnings and API call details.
-  --fail-on    : exits with code 1 if findings >= severity threshold exist.
-                 Designed for GitHub Actions / CI gates.
-  --min-severity: filters the DISPLAYED findings. --fail-on still checks all findings.
-  --quiet      : suppresses the findings table, shows only the summary panel.
+Sprint 2: Added --output sarif.
 
 Exit codes:
   0  — scan completed, no findings at or above --fail-on threshold.
   1  — scan completed, findings found at or above --fail-on threshold.
-  2  — scan failed (credentials, config error).
+  2  — scan failed (credentials, config error, bad arguments).
 """
 
 import logging
@@ -59,17 +54,17 @@ def scan_aws(
     # Output format
     output: str = typer.Option(
         "terminal", "--output", "-o",
-        help="Output format: terminal | json | html",
+        help="Output format: terminal | json | html | sarif",
     ),
     output_file: Optional[str] = typer.Option(
         None, "--output-file", "-f",
-        help="File path for json/html output.",
+        help="File path for json/html/sarif output.",
     ),
 
     # Filtering
     min_severity: Optional[str] = typer.Option(
         None, "--min-severity",
-        help="Only DISPLAY findings at this severity or above. Options: LOW, MEDIUM, HIGH, CRITICAL.",
+        help="Only DISPLAY findings at this severity or above: LOW, MEDIUM, HIGH, CRITICAL.",
         show_default=False,
     ),
     quiet: bool = typer.Option(
@@ -80,18 +75,14 @@ def scan_aws(
     # CI/CD gate
     fail_on: Optional[str] = typer.Option(
         None, "--fail-on",
-        help=(
-            "Exit with code 1 if any findings are at this severity or above. "
-            "Options: LOW, MEDIUM, HIGH, CRITICAL. "
-            "Designed for CI pipelines."
-        ),
+        help="Exit with code 1 if findings >= this severity: LOW, MEDIUM, HIGH, CRITICAL.",
         show_default=False,
     ),
 
     # Diagnostics
     verbose: bool = typer.Option(
         False, "--verbose", "-v",
-        help="Enable debug logging: show API warnings, access denied details, boto3 info.",
+        help="Enable debug logging: show API warnings and AccessDenied details.",
     ),
 ):
     """Scan an AWS account for security misconfigurations."""
@@ -100,7 +91,6 @@ def scan_aws(
 
     _setup_logging(verbose)
 
-    # Validate enum-like options early — clear error before any AWS calls
     min_sev_parsed = _parse_severity(min_severity, "--min-severity") if min_severity else None
     fail_on_parsed = _parse_severity(fail_on, "--fail-on") if fail_on else None
 
@@ -133,9 +123,10 @@ def scan_aws(
                     f"[dim]{len(findings)} finding(s)[/dim]"
                 )
             except Exception as e:
-                # Unexpected error in the check runner itself (not an AWS API error)
                 console.print(f"  [red]✗[/red] {service_name.upper():12} [red]Error: {e}[/red]")
-                logging.getLogger(__name__).exception("Unexpected error in check '%s'", service_name)
+                logging.getLogger(__name__).exception(
+                    "Unexpected error in check '%s'", service_name
+                )
 
     scan_duration = time.monotonic() - scan_start
 
@@ -168,16 +159,28 @@ def scan_aws(
             scan_errors=aws_client.errors,
             scan_duration=scan_duration,
         )
-        console.print(f"[green]JSON report saved to: {path}[/green]")
+        console.print(f"[green]JSON report saved to:[/green] {path}")
 
     elif output == "html":
         from cloudscan.report import html_report
         path = output_file or "cloudscan-report.html"
         html_report.render(all_findings, path=path, account_id=aws_client.account_id)
-        console.print(f"[green]HTML report saved to: {path}[/green]")
+        console.print(f"[green]HTML report saved to:[/green] {path}")
+
+    elif output == "sarif":
+        from cloudscan.report import sarif_report
+        path = output_file or "cloudscan-report.sarif"
+        sarif_report.render(all_findings, path=path, account_id=aws_client.account_id)
+        console.print(f"[green]SARIF report saved to:[/green] {path}")
+        console.print(
+            "[dim]Upload to GitHub: "
+            "github/codeql-action/upload-sarif@v3 with sarif_file: " + path + "[/dim]"
+        )
 
     else:
-        console.print(f"[red]Unknown output format: '{output}'. Use: terminal, json, html[/red]")
+        console.print(
+            f"[red]Unknown output format: '{output}'. Use: terminal, json, html, sarif[/red]"
+        )
         raise typer.Exit(2)
 
     # ── CI/CD gate ────────────────────────────────────────────────────────────
@@ -189,11 +192,10 @@ def scan_aws(
                 f"{fail_on_parsed.value} or above. Exiting with code 1.\n"
             )
             raise typer.Exit(1)
-        else:
-            console.print(
-                f"[bold green]PASSED:[/bold green] No findings at "
-                f"{fail_on_parsed.value} or above.\n"
-            )
+        console.print(
+            f"[bold green]PASSED:[/bold green] No findings at "
+            f"{fail_on_parsed.value} or above.\n"
+        )
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────

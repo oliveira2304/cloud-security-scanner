@@ -1,8 +1,5 @@
 """
 checks/ec2.py — EC2 and Security Group checks.
-
-Error handling: _check_open_ports operates on a dict already fetched by run().
-Any ClientError from describe_security_groups is caught in run() and recorded.
 """
 
 import logging
@@ -11,6 +8,7 @@ from typing import List
 from botocore.exceptions import ClientError
 
 from cloudscan.aws_client import AWSClient
+from cloudscan.compliance import get_compliance
 from cloudscan.models import Finding, Severity
 
 logger = logging.getLogger(__name__)
@@ -44,7 +42,6 @@ def run(client: AWSClient) -> List[Finding]:
 
 
 def _check_open_ports(sg: dict) -> List[Finding]:
-    """Check inbound rules for sensitive ports exposed to public CIDRs."""
     findings = []
     sg_id = sg["GroupId"]
     sg_name = sg.get("GroupName", sg_id)
@@ -80,13 +77,15 @@ def _check_open_ports(sg: dict) -> List[Finding]:
                     "Use VPC endpoints and private subnets to avoid public exposure."
                 ),
                 evidence=f"IpProtocol: -1, CIDRs: {', '.join(exposed_cidrs)}",
+                compliance=get_compliance("EC2_SG_ALL_TRAFFIC_OPEN"),
             ))
             continue
 
         for port, (service_name, severity) in SENSITIVE_PORTS.items():
             if _port_in_range(port, from_port, to_port):
+                finding_id = f"EC2_SG_{service_name.upper()}_OPEN"
                 findings.append(Finding(
-                    id=f"EC2_SG_{service_name.upper()}_OPEN",
+                    id=finding_id,
                     service="EC2",
                     resource=resource_label,
                     severity=severity,
@@ -103,6 +102,7 @@ def _check_open_ports(sg: dict) -> List[Finding]:
                         f"FromPort: {from_port}, ToPort: {to_port}, "
                         f"Protocol: {protocol}, CIDRs: {', '.join(exposed_cidrs)}"
                     ),
+                    compliance=get_compliance(finding_id),
                 ))
 
     return findings

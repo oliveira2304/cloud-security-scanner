@@ -5,16 +5,9 @@ Checks:
   1. Root account access keys present      (CRITICAL — CIS 1.4)
   2. Root account MFA not enabled          (CRITICAL — CIS 1.5)
   3. Root account used recently            (HIGH     — CIS 1.7)
-  4. IAM users without MFA                 (HIGH)
-  5. Access keys older than 90 days        (HIGH)
-  6. Customer policies with Action:* Resource:* (CRITICAL)
-
-Root account checks use iam:GetAccountSummary (keys, MFA) and the IAM
-credential report (last activity). Both are read-only and low-cost.
-
-The credential report may take a few seconds to generate on first call.
-If it cannot be retrieved, a ScanError is recorded rather than silently
-skipping the check.
+  4. IAM users without MFA                 (HIGH     — CIS 1.10)
+  5. Access keys older than 90 days        (HIGH     — CIS 1.14)
+  6. Customer policies with Action:* Resource:* (CRITICAL — CIS 1.16)
 """
 
 import csv
@@ -27,6 +20,7 @@ from typing import List, Optional
 from botocore.exceptions import ClientError
 
 from cloudscan.aws_client import AWSClient
+from cloudscan.compliance import get_compliance
 from cloudscan.models import Finding, Severity
 
 logger = logging.getLogger(__name__)
@@ -39,13 +33,11 @@ def run(client: AWSClient) -> List[Finding]:
     iam = client.get_client("iam")
     findings: List[Finding] = []
 
-    # Root account checks — highest priority
     try:
         findings.extend(_check_root_account(iam, client))
     except ClientError as e:
         client.record_error("IAM", "_check_root_account", "root", e)
 
-    # Per-user checks
     try:
         paginator = iam.get_paginator("list_users")
         for page in paginator.paginate():
@@ -66,7 +58,6 @@ def run(client: AWSClient) -> List[Finding]:
     except ClientError as e:
         client.record_error("IAM", "list_users", "*", e)
 
-    # Policy-level checks
     try:
         findings.extend(_check_admin_policies(iam, client))
     except ClientError as e:
@@ -78,15 +69,7 @@ def run(client: AWSClient) -> List[Finding]:
 # ── Root account ──────────────────────────────────────────────────────────────
 
 def _check_root_account(iam_client, client: AWSClient) -> List[Finding]:
-    """
-    Check root account security using GetAccountSummary and the credential report.
-
-    Why GetAccountSummary:
-      It's a single API call that returns AccountMFAEnabled and AccountAccessKeysPresent
-      for the root account specifically. No need to iterate users.
-    """
     findings = []
-
     summary = iam_client.get_account_summary()["SummaryMap"]
 
     if summary.get("AccountAccessKeysPresent", 0) > 0:
@@ -107,6 +90,7 @@ def _check_root_account(iam_client, client: AWSClient) -> List[Finding]:
                 "Root access keys cannot be restricted by SCPs or permission boundaries."
             ),
             evidence=f"GetAccountSummary: AccountAccessKeysPresent={summary['AccountAccessKeysPresent']}",
+            compliance=get_compliance("IAM_ROOT_ACCESS_KEY_EXISTS"),
         ))
 
     if summary.get("AccountMFAEnabled", 0) == 0:
@@ -123,13 +107,13 @@ def _check_root_account(iam_client, client: AWSClient) -> List[Finding]:
             ),
             recommendation=(
                 "Enable a hardware MFA device on the root account. "
-                "Virtual MFA is acceptable but hardware (YubiKey) is preferred for root. "
-                "Then lock root credentials away and never use them for daily operations."
+                "Virtual MFA is acceptable but hardware (YubiKey) is preferred. "
+                "Lock root credentials away and never use them for daily operations."
             ),
             evidence=f"GetAccountSummary: AccountMFAEnabled={summary.get('AccountMFAEnabled', 0)}",
+            compliance=get_compliance("IAM_ROOT_NO_MFA"),
         ))
 
-    # Check root last used via credential report
     root_last_used = _get_root_last_used(iam_client, client)
     if root_last_used is not None:
         age_days = (datetime.now(timezone.utc) - root_last_used).days
@@ -142,29 +126,25 @@ def _check_root_account(iam_client, client: AWSClient) -> List[Finding]:
                 title=f"Root account was used {age_days} day(s) ago",
                 description=(
                     f"The root account was last used {age_days} day(s) ago. "
-                    "Root should only be used for account-level tasks that cannot be "
-                    "delegated to IAM (e.g. closing the account, changing support plan)."
+                    "Root should only be used for account-level tasks that cannot be delegated."
                 ),
                 recommendation=(
                     "Investigate what the root account was used for. "
                     "Create IAM users/roles with least-privilege for all regular operations. "
-                    "Treat any unexpected root usage as a potential security incident."
+                    "Treat unexpected root usage as a potential security incident."
                 ),
                 evidence=f"Credential report: root password_last_used={root_last_used.isoformat()}",
+                compliance=get_compliance("IAM_ROOT_USED_RECENTLY"),
             ))
 
     return findings
 
 
 def _get_root_last_used(iam_client, client: AWSClient) -> Optional[datetime]:
-    """
-    Generate the IAM credential report and extract root account last-used date.
-    Returns None if the report cannot be retrieved or root has never been used.
-    """
+    """Generate the IAM credential report and extract root account last-used date."""
     try:
         iam_client.generate_credential_report()
 
-        # The report generation is async — poll up to ~10s
         for attempt in range(5):
             try:
                 response = iam_client.get_credential_report()
@@ -174,12 +154,12 @@ def _get_root_last_used(iam_client, client: AWSClient) -> Optional[datetime]:
                 for row in reader:
                     if row.get("user") == "<root_account>":
                         last_used_str = row.get("password_last_used", "N/A")
-                        if last_used_str and last_used_str != "N/A" and last_used_str != "no_information":
+                        if last_used_str and last_used_str not in ("N/A", "no_information"):
                             return datetime.fromisoformat(last_used_str.replace("Z", "+00:00"))
                 return None
 
             except iam_client.exceptions.ReportNotPresent:
-                logger.debug("Credential report not ready yet, attempt %d/5", attempt + 1)
+                logger.debug("Credential report not ready, attempt %d/5", attempt + 1)
                 time.sleep(2)
 
         logger.warning("IAM credential report did not become ready in time.")
@@ -193,7 +173,6 @@ def _get_root_last_used(iam_client, client: AWSClient) -> Optional[datetime]:
 # ── Per-user checks ───────────────────────────────────────────────────────────
 
 def _check_mfa(iam_client, username: str) -> List[Finding]:
-    """Detect users with no MFA device attached."""
     response = iam_client.list_mfa_devices(UserName=username)
     if not response.get("MFADevices"):
         return [Finding(
@@ -211,12 +190,12 @@ def _check_mfa(iam_client, username: str) -> List[Finding]:
                 "Use hardware MFA for privileged users."
             ),
             evidence="ListMFADevices: empty MFADevices list",
+            compliance=get_compliance("IAM_USER_NO_MFA"),
         )]
     return []
 
 
 def _check_access_key_age(iam_client, username: str) -> List[Finding]:
-    """Detect active access keys older than KEY_MAX_AGE_DAYS."""
     findings = []
     response = iam_client.list_access_keys(UserName=username)
 
@@ -241,9 +220,10 @@ def _check_access_key_age(iam_client, username: str) -> List[Finding]:
                 ),
                 recommendation=(
                     "Rotate access keys every 90 days. "
-                    "Prefer IAM roles over long-lived keys (EC2 instance profiles, Lambda execution roles)."
+                    "Prefer IAM roles over long-lived keys where possible."
                 ),
                 evidence=f"AccessKeyId: {key_id}, CreateDate: {created.isoformat()}, Age: {age_days}d",
+                compliance=get_compliance("IAM_ACCESS_KEY_NOT_ROTATED"),
             ))
 
     return findings
@@ -252,7 +232,6 @@ def _check_access_key_age(iam_client, username: str) -> List[Finding]:
 # ── Policy checks ─────────────────────────────────────────────────────────────
 
 def _check_admin_policies(iam_client, client: AWSClient) -> List[Finding]:
-    """Detect customer-managed policies that grant Action:* on Resource:*."""
     findings = []
     paginator = iam_client.get_paginator("list_policies")
 
@@ -294,6 +273,7 @@ def _check_admin_policies(iam_client, client: AWSClient) -> List[Finding]:
                                 "Use IAM Access Analyzer to generate least-privilege policies."
                             ),
                             evidence=f"PolicyArn: {policy_arn}, Action: *, Resource: *",
+                            compliance=get_compliance("IAM_POLICY_WILDCARD_ADMIN"),
                         ))
                         break
 

@@ -1,14 +1,14 @@
 # .github/workflows/ci.yml
 #
-# What this does:
-#   - Runs on every push and PR to main
-#   - Lints with ruff (fast Python linter)
-#   - Runs all unit tests with moto (no real AWS needed)
-#   - Uploads coverage report
+# Two jobs:
 #
-# Why moto works here:
-#   conftest.py injects fake AWS credentials.
-#   moto intercepts boto3 calls. No AWS account needed in CI.
+#   test  — lint + unit tests + coverage (runs on every push/PR, no AWS needed)
+#   sarif — security scan of the repo itself using cloudscan's SARIF output,
+#           uploaded to GitHub Security tab (runs on push to main only)
+#
+# The sarif job intentionally scans a *fake* local environment (no real AWS)
+# to demonstrate the GitHub Security tab integration in a portfolio context.
+# In a real deployment, this would use OIDC to assume an AWS role.
 
 name: CI
 
@@ -19,6 +19,8 @@ on:
     branches: [main]
 
 jobs:
+
+  # ── Tests ───────────────────────────────────────────────────────────────────
   test:
     name: Test (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
@@ -50,3 +52,64 @@ jobs:
         with:
           files: ./coverage.xml
           fail_ci_if_error: false
+
+  # ── SARIF upload to GitHub Security tab ─────────────────────────────────────
+  #
+  # Demonstrates the --output sarif feature.
+  # Generates a SARIF file from the sample findings and uploads it to the
+  # GitHub Security tab so findings are visible without running the tool.
+  #
+  # In a real pipeline with AWS access, replace the python script below with:
+  #   cloudscan aws --output sarif --output-file results.sarif
+  # using OIDC: https://docs.github.com/en/actions/security-for-github-actions/security-hardening-your-deployments/configuring-openid-connect-in-amazon-web-services
+  sarif:
+    name: Upload SARIF to Security tab
+    runs-on: ubuntu-latest
+    # Only run on push to main (not on PRs — avoids duplicate Security alerts)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # Required permission to upload SARIF to GitHub Security
+    permissions:
+      security-events: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install cloudscan
+        run: pip install -e .
+
+      - name: Generate SARIF from sample findings
+        run: |
+          python - <<'EOF'
+          import json, sys
+          sys.path.insert(0, ".")
+          from cloudscan.models import Finding, Severity
+          from cloudscan.compliance import get_compliance
+          from cloudscan.report import sarif_report
+
+          # Load sample findings from examples/
+          data = json.loads(open("examples/sample-output.json").read())
+          findings = [
+              Finding(
+                  id=f["id"], service=f["service"], resource=f["resource"],
+                  severity=Severity(f["severity"]), title=f["title"],
+                  description=f["description"], recommendation=f["recommendation"],
+                  evidence=f["evidence"], region=f.get("region"),
+                  compliance=get_compliance(f["id"]),
+              )
+              for f in data["findings"]
+          ]
+          sarif_report.render(findings, path="results.sarif", account_id=data["meta"]["account_id"])
+          print(f"Generated results.sarif with {len(findings)} findings")
+          EOF
+
+      - name: Upload SARIF to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results.sarif
+          category: cloudscan-aws
