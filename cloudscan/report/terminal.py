@@ -34,6 +34,7 @@ def render(
     min_severity: Optional[Severity] = None,
     scan_errors: Optional[List[ScanError]] = None,
     scan_duration: Optional[float] = None,
+    multi_region: bool = False,
 ) -> None:
     scan_errors = scan_errors or []
 
@@ -52,7 +53,7 @@ def render(
             )
 
     if not quiet and display_findings:
-        _render_table(display_findings, account_id)
+        _render_table(display_findings, account_id, multi_region)
 
     _render_summary(findings, display_findings, account_id, scan_errors, scan_duration, min_severity)
 
@@ -60,11 +61,13 @@ def render(
         _render_scan_errors(scan_errors)
 
 
-def _render_table(findings: List[Finding], account_id: str) -> None:
-    sorted_findings = sorted(
-        findings,
-        key=lambda f: (SEVERITY_ORDER.index(f.severity), f.service),
+def _render_table(findings: List[Finding], account_id: str, multi_region: bool = False) -> None:
+    sort_key = (
+        (lambda f: (SEVERITY_ORDER.index(f.severity), f.region or "", f.service))
+        if multi_region
+        else (lambda f: (SEVERITY_ORDER.index(f.severity), f.service))
     )
+    sorted_findings = sorted(findings, key=sort_key)
 
     table = Table(
         title=f"[bold]Cloud Security Scan Results[/bold]  •  Account: {account_id}",
@@ -74,20 +77,20 @@ def _render_table(findings: List[Finding], account_id: str) -> None:
     )
 
     table.add_column("Severity", style="bold", width=10, justify="center")
+    if multi_region:
+        table.add_column("Region", style="dim", width=16)
     table.add_column("Service",  style="cyan", width=12)
-    table.add_column("Resource", width=30, overflow="fold")
-    table.add_column("Title",    width=45, overflow="fold")
-    table.add_column("Evidence", width=40, overflow="fold")
+    table.add_column("Resource", width=28, overflow="fold")
+    table.add_column("Title",    width=42, overflow="fold")
+    table.add_column("Evidence", width=38, overflow="fold")
 
     for f in sorted_findings:
         color = f.severity.color()
-        table.add_row(
-            f"[{color}]{f.severity.value}[/{color}]",
-            f.service,
-            f.resource,
-            f.title,
-            f.evidence,
-        )
+        row = [f"[{color}]{f.severity.value}[/{color}]"]
+        if multi_region:
+            row.append(f.region or "—")
+        row += [f.service, f.resource, f.title, f.evidence]
+        table.add_row(*row)
 
     console.print()
     console.print(table)

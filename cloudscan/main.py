@@ -1,7 +1,8 @@
 """
 main.py — CLI entry point.
 
-Sprint 2: Added --output sarif.
+Sprint 3: Added --all-regions and multi-region support.
+          --region now accepts a comma-separated list.
 
 Exit codes:
   0  — scan completed, no findings at or above --fail-on threshold.
@@ -15,9 +16,10 @@ from typing import Optional
 
 import typer
 from rich.console import Console
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 
 from cloudscan.aws_client import AWSClient
-from cloudscan.checks import REGISTRY
+from cloudscan.checks import REGISTRY, run_all_regions
 from cloudscan.models import Severity, severity_gte
 from cloudscan.report import terminal as terminal_report
 
@@ -42,16 +44,20 @@ def scan_aws(
     ),
     region: str = typer.Option(
         "us-east-1", "--region", "-r",
-        help="AWS region to scan.",
+        help="Region to scan. Accepts comma-separated list: us-east-1,eu-west-1",
+    ),
+    all_regions: bool = typer.Option(
+        False, "--all-regions",
+        help="Scan all regions enabled in the account. Overrides --region.",
     ),
 
     # Service selection
     services: Optional[str] = typer.Option(
         None, "--services", "-s",
-        help="Comma-separated services to scan. Default: all. Example: s3,iam,ec2",
+        help="Comma-separated services to scan. Default: all. Example: s3,iam,ec2,rds,lambda",
     ),
 
-    # Output format
+    # Output
     output: str = typer.Option(
         "terminal", "--output", "-o",
         help="Output format: terminal | json | html | sarif",
@@ -64,25 +70,25 @@ def scan_aws(
     # Filtering
     min_severity: Optional[str] = typer.Option(
         None, "--min-severity",
-        help="Only DISPLAY findings at this severity or above: LOW, MEDIUM, HIGH, CRITICAL.",
+        help="Only display findings >= this severity: LOW, MEDIUM, HIGH, CRITICAL.",
         show_default=False,
     ),
     quiet: bool = typer.Option(
         False, "--quiet", "-q",
-        help="Show only the summary panel — suppress the findings table.",
+        help="Show only the summary panel — suppress findings table.",
     ),
 
     # CI/CD gate
     fail_on: Optional[str] = typer.Option(
         None, "--fail-on",
-        help="Exit with code 1 if findings >= this severity: LOW, MEDIUM, HIGH, CRITICAL.",
+        help="Exit code 1 if findings >= this severity: LOW, MEDIUM, HIGH, CRITICAL.",
         show_default=False,
     ),
 
     # Diagnostics
     verbose: bool = typer.Option(
         False, "--verbose", "-v",
-        help="Enable debug logging: show API warnings and AccessDenied details.",
+        help="Enable debug logging: API warnings, AccessDenied details.",
     ),
 ):
     """Scan an AWS account for security misconfigurations."""
@@ -94,39 +100,46 @@ def scan_aws(
     min_sev_parsed = _parse_severity(min_severity, "--min-severity") if min_severity else None
     fail_on_parsed = _parse_severity(fail_on, "--fail-on") if fail_on else None
 
+    # ── Authenticate ──────────────────────────────────────────────────────────
+    # Use the first region for session init. for_region() handles the rest.
+    primary_region = region.split(",")[0].strip()
+    aws_client = AWSClient(profile=profile, region=primary_region)
+
+    # ── Resolve regions ───────────────────────────────────────────────────────
+    if all_regions:
+        regions = aws_client.list_enabled_regions()
+    else:
+        regions = [r.strip() for r in region.split(",") if r.strip()]
+
+    multi = len(regions) > 1
+
+    # ── Print header ──────────────────────────────────────────────────────────
     console.print("\n[bold cyan]cloudscan[/bold cyan] — AWS Security Scanner")
     console.print(f"  Profile  : {profile or 'default'}")
-    console.print(f"  Region   : {region}")
+    if multi:
+        console.print(f"  Regions  : {', '.join(regions[:5])}{'...' if len(regions) > 5 else ''} ({len(regions)} total)")
+    else:
+        console.print(f"  Region   : {regions[0]}")
     if fail_on_parsed:
         console.print(f"  Fail on  : [bold]{fail_on_parsed.value}[/bold] or above")
     if min_sev_parsed:
         console.print(f"  Showing  : {min_sev_parsed.value} and above")
-
-    aws_client = AWSClient(profile=profile, region=region)
     console.print(f"  Account  : {aws_client.account_id}\n")
 
     selected = _resolve_services(services)
-    console.print(f"[dim]Running checks: {', '.join(selected)}[/dim]\n")
+    console.print(f"[dim]Services : {', '.join(selected)}[/dim]")
+    if multi:
+        console.print(f"[dim]Mode     : multi-region ({len(regions)} regions × {len(selected)} services)[/dim]")
+    console.print()
 
     # ── Run checks ────────────────────────────────────────────────────────────
     all_findings = []
     scan_start = time.monotonic()
 
-    for service_name in selected:
-        check_fn = REGISTRY[service_name]
-        with console.status(f"[cyan]Scanning {service_name.upper()}...[/cyan]"):
-            try:
-                findings = check_fn(aws_client)
-                all_findings.extend(findings)
-                console.print(
-                    f"  [green]✓[/green] {service_name.upper():12} "
-                    f"[dim]{len(findings)} finding(s)[/dim]"
-                )
-            except Exception as e:
-                console.print(f"  [red]✗[/red] {service_name.upper():12} [red]Error: {e}[/red]")
-                logging.getLogger(__name__).exception(
-                    "Unexpected error in check '%s'", service_name
-                )
+    if multi:
+        all_findings = _run_multi_region(aws_client, selected, regions)
+    else:
+        all_findings = _run_single_region(aws_client, selected)
 
     scan_duration = time.monotonic() - scan_start
 
@@ -135,7 +148,6 @@ def scan_aws(
             f"\n[yellow]  ⚠ {len(aws_client.errors)} check(s) could not complete "
             f"(see scan warnings below)[/yellow]"
         )
-
     console.print()
 
     # ── Render output ─────────────────────────────────────────────────────────
@@ -147,14 +159,14 @@ def scan_aws(
             min_severity=min_sev_parsed,
             scan_errors=aws_client.errors,
             scan_duration=scan_duration,
+            multi_region=multi,
         )
 
     elif output == "json":
         from cloudscan.report import json_report
         path = output_file or "cloudscan-report.json"
         json_report.render(
-            all_findings,
-            path=path,
+            all_findings, path=path,
             account_id=aws_client.account_id,
             scan_errors=aws_client.errors,
             scan_duration=scan_duration,
@@ -172,15 +184,9 @@ def scan_aws(
         path = output_file or "cloudscan-report.sarif"
         sarif_report.render(all_findings, path=path, account_id=aws_client.account_id)
         console.print(f"[green]SARIF report saved to:[/green] {path}")
-        console.print(
-            "[dim]Upload to GitHub: "
-            "github/codeql-action/upload-sarif@v3 with sarif_file: " + path + "[/dim]"
-        )
 
     else:
-        console.print(
-            f"[red]Unknown output format: '{output}'. Use: terminal, json, html, sarif[/red]"
-        )
+        console.print(f"[red]Unknown format: '{output}'. Use: terminal, json, html, sarif[/red]")
         raise typer.Exit(2)
 
     # ── CI/CD gate ────────────────────────────────────────────────────────────
@@ -198,14 +204,79 @@ def scan_aws(
         )
 
 
+# ── Scan runners ──────────────────────────────────────────────────────────────
+
+def _run_single_region(aws_client: AWSClient, selected: list[str]) -> list:
+    all_findings = []
+    for service_name in selected:
+        check_fn = REGISTRY[service_name]
+        with console.status(f"[cyan]Scanning {service_name.upper()}...[/cyan]"):
+            try:
+                findings = check_fn(aws_client)
+                for f in findings:
+                    if f.region is None:
+                        f.region = aws_client.region
+                all_findings.extend(findings)
+                console.print(
+                    f"  [green]✓[/green] {service_name.upper():12} "
+                    f"[dim]{len(findings)} finding(s)[/dim]"
+                )
+            except Exception as e:
+                console.print(f"  [red]✗[/red] {service_name.upper():12} [red]Error: {e}[/red]")
+                logging.getLogger(__name__).exception("Unexpected error in '%s'", service_name)
+    return all_findings
+
+
+def _run_multi_region(aws_client: AWSClient, selected: list[str], regions: list[str]) -> list:
+    """Run checks across multiple regions with a Rich progress bar."""
+    total_tasks = sum(
+        len(regions) if svc not in {"iam"} else 1
+        for svc in selected
+    )
+    completed = [0]
+
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TaskProgressColumn(),
+        console=console,
+        transient=True,
+    ) as progress:
+        task = progress.add_task(
+            f"[cyan]Scanning {len(regions)} regions...",
+            total=total_tasks,
+        )
+
+        def on_progress(region, service_name, n_findings):
+            completed[0] += 1
+            progress.update(
+                task,
+                advance=1,
+                description=f"[cyan]{service_name.upper()} / {region} → {n_findings} finding(s)",
+            )
+
+        findings = run_all_regions(
+            aws_client, selected, regions, progress_callback=on_progress
+        )
+
+    # Print per-region summary
+    by_region: dict[str, int] = {}
+    for f in findings:
+        r = f.region or "unknown"
+        by_region[r] = by_region.get(r, 0) + 1
+
+    for r in sorted(by_region):
+        console.print(f"  [green]✓[/green] {r:25} [dim]{by_region[r]} finding(s)[/dim]")
+
+    return findings
+
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _setup_logging(verbose: bool) -> None:
     level = logging.DEBUG if verbose else logging.WARNING
-    logging.basicConfig(
-        level=level,
-        format="[%(levelname)s] %(name)s: %(message)s",
-    )
+    logging.basicConfig(level=level, format="[%(levelname)s] %(name)s: %(message)s")
 
 
 def _parse_severity(value: str, flag_name: str) -> Severity:

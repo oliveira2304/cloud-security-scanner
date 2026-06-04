@@ -272,6 +272,76 @@ _COMPLIANCE: dict[str, ComplianceMap] = {
             "title": "System Monitoring",
         },
     },
+
+    # ── RDS ───────────────────────────────────────────────────────────────────
+
+    "RDS_INSTANCE_PUBLIC": {
+        "CIS_AWS_1.4": {
+            "controls": ["2.3.2"],
+            "title": "Ensure that public access is not given to RDS instance",
+        },
+        "NIST_800_53": {
+            "controls": ["AC-3", "AC-17", "SC-7"],
+            "title": "Access Enforcement / Remote Access / Boundary Protection",
+        },
+    },
+
+    "RDS_ENCRYPTION_DISABLED": {
+        "CIS_AWS_1.4": {
+            "controls": ["2.3.1"],
+            "title": "Ensure that encryption-at-rest is enabled for RDS instances",
+        },
+        "NIST_800_53": {
+            "controls": ["SC-28", "SC-28(1)"],
+            "title": "Protection of Information at Rest",
+        },
+    },
+
+    "RDS_DELETION_PROTECTION_OFF": {
+        "CIS_AWS_1.4": {
+            "controls": [],
+            "title": "RDS deletion protection best practice (no direct CIS control)",
+        },
+        "NIST_800_53": {
+            "controls": ["CP-9", "CP-10", "SI-12"],
+            "title": "Backup / Recovery / Information Management",
+        },
+    },
+
+    "RDS_MULTI_AZ_DISABLED": {
+        "CIS_AWS_1.4": {
+            "controls": [],
+            "title": "RDS Multi-AZ best practice (no direct CIS control)",
+        },
+        "NIST_800_53": {
+            "controls": ["CP-6", "CP-7", "CP-9"],
+            "title": "Alternate Storage Site / Processing Site / Backup",
+        },
+    },
+
+    # ── Lambda ────────────────────────────────────────────────────────────────
+
+    "LAMBDA_PUBLIC_URL": {
+        "CIS_AWS_1.4": {
+            "controls": [],
+            "title": "Lambda Function URL public access best practice",
+        },
+        "NIST_800_53": {
+            "controls": ["AC-2", "AC-3", "AC-17", "IA-2"],
+            "title": "Account Management / Access Enforcement / Remote Access",
+        },
+    },
+
+    "LAMBDA_ENV_SECRET_EXPOSURE": {
+        "CIS_AWS_1.4": {
+            "controls": [],
+            "title": "Lambda secrets management best practice",
+        },
+        "NIST_800_53": {
+            "controls": ["IA-5", "IA-5(7)", "SC-28"],
+            "title": "Authenticator Management / No Embedded Unencrypted Secrets",
+        },
+    },
 }
 
 

@@ -28,6 +28,8 @@ def test_registry_contains_all_expected_services():
     assert "s3" in REGISTRY
     assert "iam" in REGISTRY
     assert "ec2" in REGISTRY
+    assert "rds" in REGISTRY
+    assert "lambda" in REGISTRY
     assert "logging" in REGISTRY
 
 
