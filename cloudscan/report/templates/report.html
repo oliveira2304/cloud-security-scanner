@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CloudScan Report — {{ account_id }}</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+           background: #0f1117; color: #e2e8f0; min-height: 100vh; }
+    header { background: #1a1d2e; border-bottom: 2px solid #2d3748; padding: 24px 40px; }
+    header h1 { font-size: 1.6rem; color: #63b3ed; letter-spacing: 0.05em; }
+    header .meta { font-size: 0.85rem; color: #718096; margin-top: 6px; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 32px 40px; }
+
+    /* Summary cards */
+    .summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 32px; }
+    .card { background: #1a1d2e; border-radius: 8px; padding: 20px; text-align: center;
+            border-top: 3px solid transparent; }
+    .card.critical { border-color: #fc8181; }
+    .card.high     { border-color: #f6ad55; }
+    .card.medium   { border-color: #faf089; }
+    .card.low      { border-color: #68d391; }
+    .card .count   { font-size: 2.5rem; font-weight: 700; line-height: 1; }
+    .card .label   { font-size: 0.8rem; color: #718096; text-transform: uppercase;
+                     letter-spacing: 0.08em; margin-top: 4px; }
+    .critical .count { color: #fc8181; }
+    .high .count     { color: #f6ad55; }
+    .medium .count   { color: #faf089; }
+    .low .count      { color: #68d391; }
+
+    /* Findings table */
+    .table-wrap { overflow-x: auto; border-radius: 8px; }
+    table { width: 100%; border-collapse: collapse; background: #1a1d2e; }
+    thead th { background: #2d3748; padding: 12px 16px; text-align: left;
+               font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em;
+               color: #a0aec0; font-weight: 600; }
+    tbody tr { border-bottom: 1px solid #2d3748; transition: background 0.15s; }
+    tbody tr:hover { background: #232637; }
+    tbody td { padding: 14px 16px; font-size: 0.88rem; vertical-align: top; }
+
+    /* Severity badges */
+    .badge { display: inline-block; padding: 3px 10px; border-radius: 99px;
+             font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
+    .badge-CRITICAL { background: rgba(252,129,129,0.15); color: #fc8181; border: 1px solid #fc8181; }
+    .badge-HIGH     { background: rgba(246,173,85,0.15);  color: #f6ad55; border: 1px solid #f6ad55; }
+    .badge-MEDIUM   { background: rgba(250,240,137,0.15); color: #ecc94b; border: 1px solid #ecc94b; }
+    .badge-LOW      { background: rgba(104,211,145,0.15); color: #68d391; border: 1px solid #68d391; }
+
+    .resource { font-family: monospace; font-size: 0.82rem; color: #90cdf4; }
+    .evidence { font-family: monospace; font-size: 0.78rem; color: #718096; }
+    .rec { font-size: 0.82rem; color: #a0aec0; }
+
+    /* Collapsible detail rows */
+    details summary { cursor: pointer; font-weight: 600; color: #e2e8f0; }
+    details summary::marker { color: #63b3ed; }
+    details p { margin-top: 6px; color: #a0aec0; font-size: 0.85rem; line-height: 1.5; }
+
+    footer { text-align: center; padding: 24px; font-size: 0.78rem; color: #4a5568; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>☁ CloudScan Security Report</h1>
+    <div class="meta">Account: {{ account_id }} &nbsp;|&nbsp; Scanned: {{ scanned_at }} &nbsp;|&nbsp; cloudscan v{{ version }}</div>
+  </header>
+
+  <div class="container">
+    <div class="summary">
+      <div class="card critical">
+        <div class="count">{{ severity_counts.CRITICAL }}</div>
+        <div class="label">Critical</div>
+      </div>
+      <div class="card high">
+        <div class="count">{{ severity_counts.HIGH }}</div>
+        <div class="label">High</div>
+      </div>
+      <div class="card medium">
+        <div class="count">{{ severity_counts.MEDIUM }}</div>
+        <div class="label">Medium</div>
+      </div>
+      <div class="card low">
+        <div class="count">{{ severity_counts.LOW }}</div>
+        <div class="label">Low</div>
+      </div>
+    </div>
+
+    {% if findings %}
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Severity</th>
+            <th>Service</th>
+            <th>Resource</th>
+            <th>Finding</th>
+            <th>Evidence / Recommendation</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for f in findings | sort(attribute='severity.value') %}
+          <tr>
+            <td><span class="badge badge-{{ f.severity.value }}">{{ f.severity.value }}</span></td>
+            <td>{{ f.service }}</td>
+            <td class="resource">{{ f.resource }}</td>
+            <td>
+              <details>
+                <summary>{{ f.title }}</summary>
+                <p>{{ f.description }}</p>
+              </details>
+            </td>
+            <td>
+              <div class="evidence">{{ f.evidence }}</div>
+              <div class="rec" style="margin-top:6px;">{{ f.recommendation }}</div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p style="color: #68d391; text-align: center; padding: 40px;">No findings detected.</p>
+    {% endif %}
+  </div>
+
+  <footer>Generated by <strong>cloudscan</strong> v{{ version }}</footer>
+</body>
+</html>

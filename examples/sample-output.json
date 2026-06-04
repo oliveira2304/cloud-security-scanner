@@ -1,0 +1,149 @@
+{
+  "meta": {
+    "tool": "cloudscan",
+    "version": "0.1.0",
+    "account_id": "123456789012",
+    "scanned_at": "2025-09-14T10:32:41+00:00",
+    "total_findings": 11,
+    "severity_counts": {
+      "CRITICAL": 4,
+      "HIGH": 5,
+      "MEDIUM": 2,
+      "LOW": 0
+    }
+  },
+  "findings": [
+    {
+      "id": "S3_PUBLIC_ACCESS_BLOCK_MISSING",
+      "service": "S3",
+      "resource": "acme-app-assets-prod",
+      "severity": "CRITICAL",
+      "title": "S3 Block Public Access configuration missing",
+      "description": "The bucket has no Block Public Access configuration, which defaults to public.",
+      "recommendation": "Enable S3 Block Public Access at both bucket and account level.",
+      "evidence": "PublicAccessBlockConfiguration: not found",
+      "region": "us-east-1",
+      "metadata": {}
+    },
+    {
+      "id": "S3_PUBLIC_ACCESS_BLOCK_DISABLED",
+      "service": "S3",
+      "resource": "acme-backups-2024",
+      "severity": "CRITICAL",
+      "title": "S3 Block Public Access not fully enabled",
+      "description": "The bucket does not have all four Block Public Access settings enabled. This may allow public read/write access to objects.",
+      "recommendation": "Enable all Block Public Access settings on the bucket and at account level: BlockPublicAcls, IgnorePublicAcls, BlockPublicPolicy, RestrictPublicBuckets.",
+      "evidence": "Disabled settings: BlockPublicPolicy, RestrictPublicBuckets",
+      "region": "us-east-1",
+      "metadata": {}
+    },
+    {
+      "id": "IAM_POLICY_WILDCARD_ADMIN",
+      "service": "IAM",
+      "resource": "DevOpsFullAccess",
+      "severity": "CRITICAL",
+      "title": "IAM policy grants full admin (Action:* Resource:*)",
+      "description": "Policy 'DevOpsFullAccess' contains a statement that allows all actions on all resources. This is equivalent to AdministratorAccess.",
+      "recommendation": "Apply least privilege: grant only the specific actions and resources required. Use IAM Access Analyzer to generate least-privilege policies.",
+      "evidence": "PolicyArn: arn:aws:iam::123456789012:policy/DevOpsFullAccess, Statement Effect: Allow, Action: *, Resource: *",
+      "region": null,
+      "metadata": {}
+    },
+    {
+      "id": "LOGGING_CLOUDTRAIL_NOT_ENABLED",
+      "service": "CloudTrail",
+      "resource": "account/123456789012",
+      "severity": "CRITICAL",
+      "title": "CloudTrail is not enabled",
+      "description": "No CloudTrail trail found in this region. Without CloudTrail, API calls are not logged — incident response and forensics are impossible.",
+      "recommendation": "Enable CloudTrail with a multi-region trail. Send logs to an S3 bucket in a dedicated logging account. Enable log file validation.",
+      "evidence": "describe_trails returned empty trailList",
+      "region": "us-east-1",
+      "metadata": {}
+    },
+    {
+      "id": "EC2_SG_SSH_OPEN",
+      "service": "EC2",
+      "resource": "sg-0a1b2c3d4e5f (web-tier-sg)",
+      "severity": "CRITICAL",
+      "title": "Security Group exposes SSH port 22 to the internet",
+      "description": "Security Group 'web-tier-sg' allows inbound SSH (port 22) from 0.0.0.0/0. This is a common attack vector.",
+      "recommendation": "Restrict port 22 to specific trusted IPs or a bastion host CIDR. Consider using AWS Systems Manager Session Manager instead of SSH/RDP.",
+      "evidence": "FromPort: 22, ToPort: 22, Protocol: tcp, CIDRs: 0.0.0.0/0",
+      "region": "us-east-1",
+      "metadata": {}
+    },
+    {
+      "id": "S3_ENCRYPTION_DISABLED",
+      "service": "S3",
+      "resource": "acme-app-assets-prod",
+      "severity": "HIGH",
+      "title": "S3 bucket encryption not enabled",
+      "description": "The bucket does not have default server-side encryption configured.",
+      "recommendation": "Enable default encryption using SSE-S3 (AES-256) or SSE-KMS. Prefer SSE-KMS for audit trail and key rotation capabilities.",
+      "evidence": "GetBucketEncryption returned ServerSideEncryptionConfigurationNotFoundError",
+      "region": "us-east-1",
+      "metadata": {}
+    },
+    {
+      "id": "IAM_USER_NO_MFA",
+      "service": "IAM",
+      "resource": "deploy-user",
+      "severity": "HIGH",
+      "title": "IAM user has no MFA device",
+      "description": "User 'deploy-user' has no MFA device configured. Without MFA, a compromised password gives full account access.",
+      "recommendation": "Enforce MFA via IAM policy (Condition: aws:MultiFactorAuthPresent). Use hardware MFA for privileged users.",
+      "evidence": "ListMFADevices returned empty MFADevices list",
+      "region": null,
+      "metadata": {}
+    },
+    {
+      "id": "IAM_USER_NO_MFA",
+      "service": "IAM",
+      "resource": "ci-bot",
+      "severity": "HIGH",
+      "title": "IAM user has no MFA device",
+      "description": "User 'ci-bot' has no MFA device configured. Without MFA, a compromised password gives full account access.",
+      "recommendation": "Enforce MFA via IAM policy (Condition: aws:MultiFactorAuthPresent). Use hardware MFA for privileged users.",
+      "evidence": "ListMFADevices returned empty MFADevices list",
+      "region": null,
+      "metadata": {}
+    },
+    {
+      "id": "IAM_ACCESS_KEY_NOT_ROTATED",
+      "service": "IAM",
+      "resource": "deploy-user",
+      "severity": "HIGH",
+      "title": "IAM access key not rotated in 143 days",
+      "description": "Access key 'AKIAIOSFODNN7EXAMPLE' for user 'deploy-user' is 143 days old. Keys older than 90 days violate rotation best practices.",
+      "recommendation": "Rotate access keys every 90 days. Use IAM roles instead of long-lived access keys where possible (EC2 instance profiles, Lambda execution roles).",
+      "evidence": "AccessKeyId: AKIAIOSFODNN7EXAMPLE, CreateDate: 2025-04-24T08:00:00+00:00, Age: 143 days",
+      "region": null,
+      "metadata": {}
+    },
+    {
+      "id": "LOGGING_GUARDDUTY_NOT_ENABLED",
+      "service": "GuardDuty",
+      "resource": "account/123456789012",
+      "severity": "HIGH",
+      "title": "GuardDuty is not enabled",
+      "description": "GuardDuty is not enabled in this region. GuardDuty provides continuous threat detection using ML on CloudTrail, VPC Flow Logs, and DNS logs.",
+      "recommendation": "Enable GuardDuty in all regions. Use AWS Organizations to centrally enable GuardDuty across all accounts.",
+      "evidence": "list_detectors returned empty DetectorIds",
+      "region": "us-east-1",
+      "metadata": {}
+    },
+    {
+      "id": "S3_VERSIONING_DISABLED",
+      "service": "S3",
+      "resource": "acme-backups-2024",
+      "severity": "MEDIUM",
+      "title": "S3 bucket versioning not enabled",
+      "description": "Versioning is not enabled. Without versioning, deleted or overwritten objects cannot be recovered — this increases ransomware impact.",
+      "recommendation": "Enable versioning on the bucket. Consider MFA Delete for critical buckets.",
+      "evidence": "VersioningConfiguration.Status: 'not set'",
+      "region": "us-east-1",
+      "metadata": {}
+    }
+  ]
+}

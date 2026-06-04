@@ -1,0 +1,69 @@
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+MANIFEST
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Type checking / linters
+.mypy_cache/
+.ruff_cache/
+.pytype/
+
+# Test / coverage
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# ── AWS / Credentials ─────────────────────────────────────────────────────────
+# Never commit credentials or session tokens
+.aws/
+aws-credentials*
+credentials
+*.pem
+*.key
+*.p12
+*.pfx
+
+# ── Terraform ─────────────────────────────────────────────────────────────────
+.terraform/
+.terraform.lock.hcl
+terraform.tfstate
+terraform.tfstate.backup
+*.tfvars
+# Keep example tfvars but never real ones
+!*.tfvars.example
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+crash.log
+crash.*.log
+
+# ── cloudscan generated reports ───────────────────────────────────────────────
+cloudscan-report.json
+cloudscan-report.html
+*.scan.json
+*.scan.html
+
+# ── OS / Editor ───────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+*~

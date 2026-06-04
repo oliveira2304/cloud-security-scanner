@@ -1,0 +1,9 @@
+# Normalize line endings to LF in the repository.
+# Checked-out files on Windows will use CRLF; on Linux/macOS they use LF.
+# This ensures CI (Linux runners) always sees LF, avoiding false diffs.
+* text=auto eol=lf
+
+# Binary files — no line ending conversion
+*.png binary
+*.jpg binary
+*.ico binary
