@@ -1,9 +1,9 @@
-# ☁ cloudscan — AWS Cloud Security Scanner
+# cloudscan - AWS Cloud Security Scanner
 
 > A Python CLI that scans AWS accounts for security misconfigurations and generates terminal, JSON, and HTML reports.
 
-[![CI](https://github.com/YOUR_USERNAME/cloud-security-scanner/actions/workflows/ci.yml/badge.svg)](https://github.com/YOUR_USERNAME/cloud-security-scanner/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/YOUR_USERNAME/cloud-security-scanner/branch/main/graph/badge.svg)](https://codecov.io/gh/YOUR_USERNAME/cloud-security-scanner)
+[![CI](https://github.com/oliveira2304/cloud-security-scanner/actions/workflows/ci.yml/badge.svg)](https://github.com/oliveira2304/cloud-security-scanner/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/oliveira2304/cloud-security-scanner/branch/main/graph/badge.svg)](https://codecov.io/gh/oliveira2304/cloud-security-scanner)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -15,7 +15,7 @@
 
 Built from scratch, **inspired by [Prowler](https://github.com/prowler-cloud/prowler) and [ScoutSuite](https://github.com/nccgroup/ScoutSuite)**, to deeply understand how cloud security scanners work rather than just using one.
 
-**Sample output files:** [`examples/sample-output.json`](examples/sample-output.json) · [`examples/sample-report.html`](examples/sample-report.html)
+**Sample output files:** [`examples/sample-output.json`](examples/sample-output.json) | [`examples/sample-report.html`](examples/sample-report.html)
 
 ---
 
@@ -24,50 +24,47 @@ Built from scratch, **inspired by [Prowler](https://github.com/prowler-cloud/pro
 ```
 $ cloudscan aws --profile sandbox
 
- cloudscan — AWS Security Scanner
+ cloudscan - AWS Security Scanner
   Profile : sandbox
   Region  : us-east-1
   Account : 123456789012
 
 Running checks: s3, iam, ec2, logging
 
-  ✓ S3          4 finding(s)
-  ✓ IAM         4 finding(s)
-  ✓ EC2         1 finding(s)
-  ✓ LOGGING     2 finding(s)
+  + S3          4 finding(s)
+  + IAM         4 finding(s)
+  + EC2         1 finding(s)
+  + LOGGING     2 finding(s)
 
-╭──────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│                     Cloud Security Scan Results  •  Account: 123456789012                            │
-├──────────┬────────────┬──────────────────────────────┬─────────────────────────────────────┬─────────┤
-│ Severity │ Service    │ Resource                     │ Title                               │Evidence │
-├──────────┼────────────┼──────────────────────────────┼─────────────────────────────────────┼─────────┤
-│ CRITICAL │ S3         │ acme-app-assets-prod          │ S3 Block Public Access config…      │ Public… │
-│ CRITICAL │ IAM        │ DevOpsFullAccess              │ IAM policy grants full admin…       │ Action… │
-│ CRITICAL │ EC2        │ sg-0a1b2c3d (web-tier-sg)    │ Security Group exposes SSH port 22… │ 0.0.0.… │
-│ CRITICAL │ CloudTrail │ account/123456789012          │ CloudTrail is not enabled           │ descri… │
-│   HIGH   │ S3         │ acme-app-assets-prod          │ S3 bucket encryption not enabled    │ GetBuc… │
-│   HIGH   │ IAM        │ deploy-user                  │ IAM user has no MFA device          │ ListMF… │
-│   HIGH   │ IAM        │ deploy-user                  │ IAM access key not rotated…143 days │ AKIA0… │
-│   HIGH   │ GuardDuty  │ account/123456789012          │ GuardDuty is not enabled            │ list_d… │
-│  MEDIUM  │ S3         │ acme-backups-2024             │ S3 bucket versioning not enabled    │ Versio… │
-╰──────────┴────────────┴──────────────────────────────┴─────────────────────────────────────┴─────────╯
++----------+------------+------------------------------+-------------------------------------+---------+
+| Severity | Service    | Resource                     | Title                               |Evidence |
++----------+------------+------------------------------+-------------------------------------+---------+
+| CRITICAL | S3         | acme-app-assets-prod         | S3 Block Public Access config...    | Public..|
+| CRITICAL | IAM        | DevOpsFullAccess             | IAM policy grants full admin...     | Action..|
+| CRITICAL | EC2        | sg-0a1b2c3d (web-tier-sg)   | Security Group exposes SSH port 22  | 0.0.0.. |
+| CRITICAL | CloudTrail | account/123456789012         | CloudTrail is not enabled           | descri..|
+|   HIGH   | S3         | acme-app-assets-prod         | S3 bucket encryption not enabled    | GetBuc..|
+|   HIGH   | IAM        | deploy-user                  | IAM user has no MFA device          | ListMF..|
+|   HIGH   | IAM        | deploy-user                  | IAM access key not rotated 143 days | AKIA0.. |
+|   HIGH   | GuardDuty  | account/123456789012         | GuardDuty is not enabled            | list_d..|
+|  MEDIUM  | S3         | acme-backups-2024            | S3 bucket versioning not enabled    | Versio..|
++----------+------------+------------------------------+-------------------------------------+---------+
 
-╭─ Scan Summary ─────────────────────────╮
-│ Account: 123456789012                  │
-│ Total findings: 11                     │
-│                                        │
-│   CRITICAL  4                          │
-│      HIGH   5                          │
-│    MEDIUM   2                          │
-│       LOW   0                          │
-╰────────────────────────────────────────╯
+ Scan Summary
+  Account: 123456789012
+  Total findings: 11
+
+  CRITICAL  4
+      HIGH  5
+    MEDIUM  2
+       LOW  0
 ```
 
 ---
 
 ## Checks
 
-| Service | ID | Severity |
+| Service | Check | Severity |
 |---|---|:---:|
 | **S3** | Block Public Access disabled or missing | `CRITICAL` |
 | **S3** | Server-side encryption not configured | `HIGH` |
@@ -91,10 +88,10 @@ Running checks: s3, iam, ec2, logging
 **Requirements:** Python 3.11+, AWS credentials configured (`aws configure` or environment variables).
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/cloud-security-scanner.git
+git clone https://github.com/oliveira2304/cloud-security-scanner.git
 cd cloud-security-scanner
 
-# Create virtual environment (recommended)
+# Create a virtual environment (recommended)
 python -m venv .venv
 source .venv/bin/activate        # Linux/macOS
 .venv\Scripts\activate           # Windows
@@ -107,7 +104,7 @@ pip install -e .
 ## Usage
 
 ```bash
-# Scan using default AWS profile
+# Scan using the default AWS profile
 cloudscan aws
 
 # Scan with a named profile
@@ -137,8 +134,6 @@ cloudscan aws --profile sandbox --region eu-west-1 --services s3,iam,ec2 --outpu
 | JSON | `--output json` | Automation, diffing, SIEM ingestion |
 | HTML | `--output html` | Reports to share with teams |
 
-Sample outputs: [`sample-output.json`](examples/sample-output.json) · [`sample-report.html`](examples/sample-report.html)
-
 ---
 
 ## Architecture
@@ -149,7 +144,7 @@ cloudscan/
 ├── models.py             Finding dataclass + Severity enum
 ├── aws_client.py         boto3 session wrapper
 ├── checks/
-│   ├── __init__.py       REGISTRY: maps service name → run()
+│   ├── __init__.py       REGISTRY: maps service name to run()
 │   ├── s3.py             S3 checks
 │   ├── iam.py            IAM checks
 │   ├── ec2.py            EC2 / Security Group checks
@@ -157,13 +152,13 @@ cloudscan/
 └── report/
     ├── terminal.py        Rich table + summary panel
     ├── json_report.py     Structured JSON with metadata envelope
-    └── html_report.py     Jinja2 → self-contained HTML
+    └── html_report.py     Jinja2 self-contained HTML report
 ```
 
 **Key design decisions:**
 
-- **Every check has signature `run(client) → List[Finding]`** — reporters are completely decoupled from AWS logic. Adding a new service means one new file and one line in `REGISTRY`.
-- **`Finding` is a dataclass, not a dict** — type-safe throughout, but serialises cleanly to JSON via `.to_dict()`.
+- **Every check has signature `run(client) -> List[Finding]`** — reporters are completely decoupled from AWS logic. Adding a new service means one new file and one line in `REGISTRY`.
+- **`Finding` is a dataclass, not a dict** — type-safe throughout, serialises cleanly to JSON via `.to_dict()`.
 - **`AWSClient` wraps boto3** — credentials and region configured in one place; tests swap in mocked sessions without touching check code.
 - **Fail fast on credentials** — `AWSClient.__init__` calls `sts:GetCallerIdentity` immediately, not mid-scan.
 
@@ -171,7 +166,7 @@ cloudscan/
 
 ## Running tests
 
-Tests use [moto](https://github.com/getmoto/moto) to mock AWS — no real account or credentials needed.
+Tests use [moto](https://github.com/getmoto/moto) to mock AWS — **no real account or credentials needed**.
 
 ```bash
 pip install -e ".[dev]"
@@ -179,42 +174,42 @@ pip install -e ".[dev]"
 # Run all tests
 pytest
 
-# With coverage
+# With coverage report
 pytest --cov=cloudscan --cov-report=term-missing
 ```
 
-The test suite covers each check function in isolation: creating the specific misconfiguration, calling the check, and asserting on finding ID and severity.
+The test suite covers each check function in isolation: creating the specific misconfiguration with moto, calling the check, and asserting on finding ID and severity.
 
 ---
 
 ## Terraform vulnerable lab
 
-The `terraform-lab/insecure-aws-lab/` directory provisions intentionally misconfigured AWS resources for end-to-end testing.
+`terraform-lab/insecure-aws-lab/` provisions intentionally misconfigured AWS resources for end-to-end testing.
 
-**Resources created:**
-- S3 bucket with Block Public Access disabled, no encryption, no versioning
-- IAM user without MFA + access key + wildcard `Action:*` policy
-- Security Group with SSH (22) and MySQL (3306) open to `0.0.0.0/0`
+**Resources created (all deliberately insecure):**
+- S3 bucket: Block Public Access disabled, no encryption, no versioning
+- IAM user: no MFA + active access key + wildcard `Action: *` policy
+- Security Group: SSH (22) and MySQL (3306) open to `0.0.0.0/0`
 
 ```bash
 cd terraform-lab/insecure-aws-lab
 terraform init
-terraform apply     # ⚠ use a sandbox account only
+terraform apply     # use a sandbox account only
 
-# Scan the environment — should surface 8+ findings
+# Scan — should surface 8+ findings
 cloudscan aws --profile sandbox
 
 # Clean up all resources
 terraform destroy
 ```
 
-> **Warning:** Only run this in a dedicated AWS sandbox account. It intentionally creates public resources.
+> **Warning:** Only run this in a dedicated AWS sandbox account. It intentionally creates public-facing resources.
 
 ---
 
 ## Required AWS permissions
 
-`cloudscan` only needs read-only access. Example least-privilege policy:
+`cloudscan` only needs **read-only** access. Example least-privilege policy:
 
 ```json
 {
@@ -256,7 +251,7 @@ terraform destroy
 | AWS SDK | [boto3](https://boto3.amazonaws.com/v1/documentation/api/latest/index.html) |
 | Testing | [pytest](https://pytest.org) + [moto](https://github.com/getmoto/moto) |
 | Linter | [ruff](https://github.com/astral-sh/ruff) |
-| Infrastructure | [Terraform](https://www.terraform.io/) ≥ 1.6 |
+| Infrastructure | [Terraform](https://www.terraform.io/) >= 1.6 |
 | CI | GitHub Actions |
 
 ---
