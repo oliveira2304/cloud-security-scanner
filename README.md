@@ -3,19 +3,28 @@
 > A Python CLI that scans AWS accounts for security misconfigurations, maps findings to CIS AWS Benchmark controls, and generates terminal, JSON, HTML, and SARIF reports.
 
 [![CI](https://github.com/oliveira2304/cloud-security-scanner/actions/workflows/ci.yml/badge.svg)](https://github.com/oliveira2304/cloud-security-scanner/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/oliveira2304/cloud-security-scanner/branch/main/graph/badge.svg)](https://codecov.io/gh/oliveira2304/cloud-security-scanner)
+[![Tests](https://img.shields.io/badge/tests-229%20passing-brightgreen)](https://github.com/oliveira2304/cloud-security-scanner/actions)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+
+---
+
+## Why this project
+
+- **Cloud Security** — detects the misconfigurations most commonly found in real AWS penetration tests and audits, across IAM, S3, EC2, RDS, Lambda, CloudTrail, and GuardDuty
+- **Compliance** — every finding maps to CIS AWS Benchmark v1.4 and NIST 800-53 controls, the frameworks used in real security audits
+- **DevSecOps** — `--fail-on CRITICAL` exits with code 1, making it a drop-in security gate for GitHub Actions, GitLab CI, or Jenkins
+- **Security automation** — SARIF output integrates findings directly into the GitHub Security tab; multi-region scanning runs in parallel across all enabled regions
+
+Built from scratch, **inspired by [Prowler](https://github.com/prowler-cloud/prowler) and [ScoutSuite](https://github.com/nccgroup/ScoutSuite)**, to understand how cloud security scanners work rather than just using one.
+
+**Sample output:** [`examples/sample-output.json`](examples/sample-output.json) | [`examples/sample-report.html`](examples/sample-report.html)
 
 ---
 
 ## What it does
 
 `cloudscan` connects to an AWS account using your existing credentials, runs **27 security checks** across 6 services, maps every finding to **CIS AWS Benchmark v1.4** and **NIST 800-53** controls, and generates actionable reports.
-
-Built from scratch, **inspired by [Prowler](https://github.com/prowler-cloud/prowler) and [ScoutSuite](https://github.com/nccgroup/ScoutSuite)**, to understand how cloud security scanners work rather than just using one.
-
-**Sample output:** [`examples/sample-output.json`](examples/sample-output.json) | [`examples/sample-report.html`](examples/sample-report.html)
 
 ---
 
@@ -66,8 +75,8 @@ git clone https://github.com/oliveira2304/cloud-security-scanner.git
 cd cloud-security-scanner
 
 python -m venv .venv
-source .venv/bin/activate        # Linux/macOS
-.venv\Scripts\activate           # Windows
+source .venv/bin/activate          # Linux/macOS
+.\.venv\Scripts\activate           # Windows (PowerShell)
 
 pip install -e .
 ```
