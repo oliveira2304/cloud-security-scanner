@@ -19,6 +19,14 @@ Built from scratch, **inspired by [Prowler](https://github.com/prowler-cloud/pro
 
 ---
 
+## Screenshots
+
+![229 tests passing in VS Code](docs/image-1780620692352.png)
+
+![HTML Security Report with CIS controls](docs/image-1780620698582.png)
+
+---
+
 ## Checks
 
 | Service | Check | Severity | CIS AWS 1.4 |
